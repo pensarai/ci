@@ -1,6 +1,6 @@
 {
   "name": "@pensar/ci",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "dist/bin/index.js",
   "bin": {
     "pensar": "dist/bin/index.js"
@@ -16,12 +16,20 @@
   "devDependencies": {
     "@types/commander": "^2.12.0",
     "@types/node": "^22.13.4",
-    "commander": "^13.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "commander": "^13.1.0"
+
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14"
   }
 }
