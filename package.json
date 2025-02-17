@@ -1,9 +1,9 @@
 {
   "name": "@pensar/ci",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "main": "dist/bin/index.js",
   "bin": {
-    "pensar": "dist/index.js"
+    "pensar": "dist/bin/index.js"
   },
   "scripts": {
     "build": "tsc",

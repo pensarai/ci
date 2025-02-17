@@ -10,9 +10,8 @@ function getEnvVars() {
   if (!process.env.CI_COMMIT_REF_NAME)
     throw new Error("COMMIT_REF_NAME unavailable");
   const targetBranch = process.env.CI_COMMIT_REF_NAME;
-  if (!process.env.CI_PIPELINE_ID)
-    throw new Error("CI_PIPELINE_ID unavailable");
-  const actionRunId = parseInt(process.env.CI_PIPELINE_ID);
+  if (!process.env.CI_JOB_ID) throw new Error("CI_PIPELINE_ID unavailable");
+  const actionRunId = parseInt(process.env.CI_JOB_ID);
   const pullRequest = process.env.CI_MERGE_REQUEST_IID
     ? process.env.CI_MERGE_REQUEST_IID
     : null;
