@@ -21,9 +21,9 @@ export function getApiUrl(environment: "dev" | "staging" | null) {
     case "staging":
       console.warn("Using staging url https://console-staging-api.pensar.dev");
 
-      return "https://console-staging-api.pensar.dev";
+      return "https://staging-api.pensar.dev";
     default:
-      return "https://console-api.pensar.dev";
+      return "https://api.pensar.dev";
   }
 }
 
