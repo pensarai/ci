@@ -63,6 +63,7 @@ export async function runScan() {
     }
   } catch (error) {
     console.error(error);
+    throw error;
   }
 }
 
