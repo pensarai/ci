@@ -15,6 +15,8 @@ function getEnvVars() {
   const pullRequest = process.env.CI_MERGE_REQUEST_IID
     ? process.env.CI_MERGE_REQUEST_IID
     : null;
+  const waitForComplete =
+    process.env.WAIT_FOR_COMPLETE === "false" ? false : true;
 
   return {
     apiKey,
@@ -23,6 +25,7 @@ function getEnvVars() {
     actionRunId,
     pullRequest,
     environment,
+    waitForComplete,
   };
 }
 
@@ -35,6 +38,7 @@ export async function runScan() {
       pullRequest,
       repoId,
       targetBranch,
+      waitForComplete,
     } = getEnvVars();
 
     const { scanId } = await CI.postDispatchScan({
@@ -46,19 +50,25 @@ export async function runScan() {
       targetBranch,
     });
 
-    const { status } = await CI.pollScanStatus({ apiKey, environment, scanId });
-
-    if (status === "done") {
-      const { issues } = await CI.getScanIssues({
+    if (waitForComplete) {
+      const { status } = await CI.pollScanStatus({
         apiKey,
         environment,
         scanId,
       });
-      if (issues.length > 0) {
-        throw new Error(`Scan completed. ${issues.length} issues found`);
-      }
-      if (issues.length === 0) {
-        console.log("Scan completed. No issues found");
+
+      if (status === "done") {
+        const { issues } = await CI.getScanIssues({
+          apiKey,
+          environment,
+          scanId,
+        });
+        if (issues.length > 0) {
+          throw new Error(`Scan completed. ${issues.length} issues found`);
+        }
+        if (issues.length === 0) {
+          console.log("Scan completed. No issues found");
+        }
       }
     }
   } catch (error) {
