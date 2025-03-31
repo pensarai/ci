@@ -83,13 +83,13 @@ interface GetScanStatusParams {
 }
 
 const ScanStatusResponseObject = z.object({
-  status: z.enum(["done", "triaging", "scanning", "error"]),
+  status: z.enum(["done", "triaging", "scanning", "error", "patching"]),
   errorMessage: z.string().optional(),
   message: z.string().optional(),
 });
 
 export async function getScanStatus(params: GetScanStatusParams): Promise<{
-  status: "done" | "triaging" | "scanning" | "error";
+  status: "done" | "triaging" | "scanning" | "error" | "patching";
   errorMessage?: string;
 }> {
   const apiUrl = getApiUrl(params.environment);

@@ -5,7 +5,7 @@ dotenv.config();
 function getEnvVars() {
   const apiKey = CI.getApiKeyEnvVar();
   const environment = CI.getEnvironmentEnvVar();
-  if (!process.env.CI_PROJECT_ID) throw new Error("CI_PROJECT_ID unavaiable");
+  if (!process.env.CI_PROJECT_ID) throw new Error("CI_PROJECT_ID unavailable");
   const repoId = parseInt(process.env.CI_PROJECT_ID);
   if (!process.env.CI_COMMIT_REF_NAME)
     throw new Error("COMMIT_REF_NAME unavailable");
