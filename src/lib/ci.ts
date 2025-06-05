@@ -131,7 +131,7 @@ export async function getScanIssues(
 
 export async function pollScanStatus(
   params: GetScanStatusParams,
-  pollIntervalMs = 1000
+  pollIntervalMs = 5000
 ): Promise<{ status: "done" }> {
   const sleep = (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms));
