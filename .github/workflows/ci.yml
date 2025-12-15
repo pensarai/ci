@@ -36,3 +36,4 @@ jobs:
       - name: Verify CLI is executable
         run: node dist/bin/index.js --help
 
+
