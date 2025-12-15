@@ -1,80 +1,66 @@
-import { CI } from "./ci";
-import dotenv from "dotenv";
+import { CI } from './ci';
+import dotenv from 'dotenv';
 dotenv.config();
 
-function getEnvVars() {
+/**
+ * Get GitLab CI environment variables and map them to Pensar config
+ */
+function getGitLabEnvVars() {
   const apiKey = CI.getApiKeyEnvVar();
+  const projectId = CI.getProjectIdEnvVar();
   const environment = CI.getEnvironmentEnvVar();
-  if (!process.env.CI_PROJECT_ID) throw new Error("CI_PROJECT_ID unavailable");
-  const repoId = parseInt(process.env.CI_PROJECT_ID);
-  if (!process.env.CI_COMMIT_REF_NAME)
-    throw new Error("COMMIT_REF_NAME unavailable");
-  const targetBranch = process.env.CI_COMMIT_REF_NAME;
-  if (!process.env.CI_JOB_ID) throw new Error("CI_PIPELINE_ID unavailable");
-  const actionRunId = parseInt(process.env.CI_JOB_ID);
-  const pullRequest = process.env.CI_MERGE_REQUEST_IID
-    ? process.env.CI_MERGE_REQUEST_IID
-    : null;
-  const waitForComplete =
-    process.env.WAIT_FOR_COMPLETE === "false" ? false : true;
+
+  // GitLab CI provides the branch name in CI_COMMIT_REF_NAME
+  const branch = process.env.CI_COMMIT_REF_NAME ?? undefined;
+
+  // Check if we should wait for completion
+  const wait = process.env.PENSAR_WAIT !== 'false';
+
+  // Scan level from env or default to full
+  const scanLevel =
+    (process.env.PENSAR_SCAN_LEVEL as 'priority' | 'full') ?? 'full';
 
   return {
     apiKey,
-    repoId,
-    targetBranch,
-    actionRunId,
-    pullRequest,
+    projectId,
+    branch,
     environment,
-    waitForComplete,
+    wait,
+    scanLevel,
   };
 }
 
-export async function runScan() {
+/**
+ * Run a Pensar scan from GitLab CI
+ */
+export async function runScan(): Promise<void> {
   try {
-    const {
-      apiKey,
-      actionRunId,
-      environment,
-      pullRequest,
-      repoId,
-      targetBranch,
-      waitForComplete,
-    } = getEnvVars();
+    const { apiKey, projectId, branch, environment, wait, scanLevel } =
+      getGitLabEnvVars();
 
-    const { scanId } = await CI.postDispatchScan({
+    console.log('Starting Pensar security scan from GitLab CI...');
+
+    const result = await CI.runScan({
       apiKey,
-      actionRunId,
+      projectId,
+      branch,
+      scanLevel,
       environment,
-      pullRequest,
-      repoId,
-      targetBranch,
+      wait,
     });
 
-    if (waitForComplete) {
-      const { status } = await CI.pollScanStatus({
-        apiKey,
-        environment,
-        scanId,
-      });
-
-      if (status === "done") {
-        const { issues } = await CI.getScanIssues({
-          apiKey,
-          environment,
-          scanId,
-        });
-        if (issues.length > 0) {
-          throw new Error(`Scan completed. ${issues.length} issues found`);
-        }
-        if (issues.length === 0) {
-          console.log("Scan completed. No issues found");
-        }
+    if (result.status === 'completed') {
+      if (result.issuesCount > 0) {
+        console.error(`\n❌ Scan found ${result.issuesCount} security issues`);
+        process.exit(1);
+      } else {
+        console.log('\n✅ Scan completed with no issues found');
       }
     }
   } catch (error) {
-    console.error(error);
-    throw error;
+    console.error('Scan failed:', error);
+    process.exit(1);
   }
 }
 
-export * as Gitlab from "./gitlab";
+export * as Gitlab from './gitlab';

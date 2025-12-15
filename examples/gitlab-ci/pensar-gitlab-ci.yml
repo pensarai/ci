@@ -1,0 +1,49 @@
+# Pensar Security Scan for GitLab CI
+# Add this to your .gitlab-ci.yml or include it as a template
+
+stages:
+  - test
+  - security
+
+# Run on merge requests
+pensar-scan-mr:
+  stage: security
+  image: node:20
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  before_script:
+    - npm install -g @pensar/ci
+  script:
+    - pensar scan --branch $CI_COMMIT_REF_NAME
+  variables:
+    PENSAR_API_KEY: $PENSAR_API_KEY
+    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID
+
+# Run on commits to main branches
+pensar-scan-push:
+  stage: security
+  image: node:20
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"
+  before_script:
+    - npm install -g @pensar/ci
+  script:
+    - pensar scan --branch $CI_COMMIT_REF_NAME
+  variables:
+    PENSAR_API_KEY: $PENSAR_API_KEY
+    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID
+
+# Run after deployment (triggered by upstream pipeline)
+pensar-scan-post-deploy:
+  stage: security
+  image: node:20
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline" # Triggered by another pipeline
+  before_script:
+    - npm install -g @pensar/ci
+  script:
+    - echo "Running security scan after deployment..."
+    - pensar scan --branch $CI_COMMIT_REF_NAME
+  variables:
+    PENSAR_API_KEY: $PENSAR_API_KEY
+    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID

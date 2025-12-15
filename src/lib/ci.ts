@@ -1,154 +1,225 @@
-import { z } from "zod";
-import dotenv from "dotenv";
+import { z } from 'zod';
+import dotenv from 'dotenv';
 dotenv.config();
 
-export function getApiKeyEnvVar() {
+// Environment helpers
+export function getApiKeyEnvVar(): string {
   if (!process.env.PENSAR_API_KEY)
-    throw new Error("PENSAR_API_KEY not configured");
+    throw new Error('PENSAR_API_KEY not configured');
 
   return process.env.PENSAR_API_KEY;
 }
 
-export function getEnvironmentEnvVar() {
-  return (process.env.ENVIRONMENT as "dev" | "staging") ?? null;
+export function getProjectIdEnvVar(): string {
+  if (!process.env.PENSAR_PROJECT_ID)
+    throw new Error('PENSAR_PROJECT_ID not configured');
+
+  return process.env.PENSAR_PROJECT_ID;
 }
 
-export function getApiUrl(environment: "dev" | "staging" | null) {
-  switch (environment) {
-    case "dev":
-      console.warn("Using dev url https://josh-pensar-api.pensar.dev");
-      return "https://josh-pensar-api.pensar.dev";
-    case "staging":
-      console.warn("Using staging url https://console-staging-api.pensar.dev");
+export function getEnvironmentEnvVar(): 'dev' | 'staging' | null {
+  return (process.env.PENSAR_ENVIRONMENT as 'dev' | 'staging') ?? null;
+}
 
-      return "https://staging-api.pensar.dev";
+export function getApiUrl(environment: 'dev' | 'staging' | null): string {
+  switch (environment) {
+    case 'dev':
+      console.warn('Using dev environment');
+      return 'https://josh-pensar-api.pensar.dev';
+    case 'staging':
+      console.warn('Using staging environment');
+      return 'https://staging-api.pensar.dev';
     default:
-      return "https://api.pensar.dev";
+      return 'https://api.pensar.dev';
   }
 }
 
-interface DispatchScanParams {
-  apiKey: string;
-  repoId: number;
-  targetBranch: string;
-  actionRunId: number;
-  pullRequest: string | null;
-  environment: "dev" | "staging" | null;
-}
-
-const DispatchScanRequestObject = z.object({
-  apiKey: z.string(),
-  repoId: z.number(),
-  targetBranch: z.string(),
-  actionRunId: z.number(),
-  pullRequest: z.string().nullable(),
-  eventType: z.enum(["pull-request", "commit"]),
-});
-
+// API Response schemas
 const DispatchScanResponseObject = z.object({
-  scanId: z.string().optional(),
-  message: z.string().optional(),
+  scanId: z.string(),
+  label: z.string(),
+  status: z.string(),
+  error: z.string().optional(),
 });
-
-export async function postDispatchScan(
-  params: DispatchScanParams
-): Promise<{ scanId: string }> {
-  const apiUrl = getApiUrl(params.environment);
-  const requestBody: z.infer<typeof DispatchScanRequestObject> = {
-    apiKey: params.apiKey,
-    repoId: params.repoId,
-    targetBranch: params.targetBranch,
-    actionRunId: params.actionRunId,
-    pullRequest: params.pullRequest,
-    eventType: params.pullRequest ? "pull-request" : "commit",
-  };
-
-  const resp = await fetch(`${apiUrl}/ci/scan/dispatch`, {
-    method: "POST",
-    body: JSON.stringify(requestBody),
-  });
-  const json = await resp.json();
-  const result = DispatchScanResponseObject.parse(json);
-
-  if (resp.status !== 200 || !result.scanId)
-    throw new Error(`Error dispatching scan ${result.message}`);
-
-  return { scanId: result.scanId };
-}
-
-interface GetScanStatusParams {
-  apiKey: string;
-  scanId: string;
-  environment: "dev" | "staging" | null;
-}
 
 const ScanStatusResponseObject = z.object({
-  status: z.enum(["done", "triaging", "scanning", "error", "patching"]),
-  errorMessage: z.string().optional(),
-  message: z.string().optional(),
+  scanId: z.string(),
+  label: z.string(),
+  status: z.enum(['queued', 'running', 'completed', 'failed', 'paused']),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  issuesCount: z.number(),
+  reportReady: z.boolean(),
+  error: z.string().optional(),
 });
 
-export async function getScanStatus(params: GetScanStatusParams): Promise<{
-  status: "done" | "triaging" | "scanning" | "error" | "patching";
-  errorMessage?: string;
-}> {
-  const apiUrl = getApiUrl(params.environment);
+export type ScanStatus = z.infer<typeof ScanStatusResponseObject>;
 
-  const resp = await fetch(`${apiUrl}/ci/scan/status`, {
-    method: "POST",
-    body: JSON.stringify({ scanId: params.scanId, apiKey: params.apiKey }),
-  });
-
-  const result = ScanStatusResponseObject.parse(await resp.json());
-
-  if (resp.status !== 200)
-    throw new Error(`Error getting scan status ${result.message}`);
-
-  return { status: result.status, errorMessage: result.errorMessage };
+// API Client
+export interface DispatchScanParams {
+  apiKey: string;
+  projectId: string;
+  branch?: string;
+  scanLevel?: 'priority' | 'full';
+  environment?: 'dev' | 'staging' | null;
 }
 
-const IssueObject = z.object({});
+export async function dispatchScan(
+  params: DispatchScanParams
+): Promise<{ scanId: string; label: string }> {
+  const apiUrl = getApiUrl(params.environment ?? null);
 
-const ScanIssuesResponseObject = IssueObject.array();
-
-export async function getScanIssues(
-  params: GetScanStatusParams
-): Promise<{ issues: z.infer<typeof IssueObject>[] }> {
-  const apiUrl = getApiUrl(params.environment);
-
-  const resp = await fetch(`${apiUrl}/ci/scan/issues`, {
-    method: "POST",
-    body: JSON.stringify({ scanId: params.scanId, apiKey: params.apiKey }),
+  const resp = await fetch(`${apiUrl}/ci/dispatch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': params.apiKey,
+    },
+    body: JSON.stringify({
+      projectId: params.projectId,
+      branch: params.branch,
+      scanLevel: params.scanLevel,
+    }),
   });
-  const json = await resp.json();
-  const result = ScanIssuesResponseObject.parse(json);
 
-  if (resp.status !== 200 && result)
-    throw new Error(`Error getting scan status}`);
+  const json = (await resp.json()) as { error?: string };
 
-  return { issues: result };
+  if (!resp.ok) {
+    throw new Error(`Error dispatching scan: ${json.error || resp.statusText}`);
+  }
+
+  const result = DispatchScanResponseObject.parse(json);
+  return { scanId: result.scanId, label: result.label };
+}
+
+export interface GetScanStatusParams {
+  apiKey: string;
+  scanId: string;
+  environment?: 'dev' | 'staging' | null;
+}
+
+export async function getScanStatus(
+  params: GetScanStatusParams
+): Promise<ScanStatus> {
+  const apiUrl = getApiUrl(params.environment ?? null);
+
+  const resp = await fetch(`${apiUrl}/ci/status/${params.scanId}`, {
+    method: 'GET',
+    headers: {
+      'x-api-key': params.apiKey,
+    },
+  });
+
+  const json = (await resp.json()) as { error?: string };
+
+  if (!resp.ok) {
+    throw new Error(
+      `Error getting scan status: ${json.error || resp.statusText}`
+    );
+  }
+
+  return ScanStatusResponseObject.parse(json);
+}
+
+export interface PollScanStatusParams {
+  apiKey: string;
+  scanId: string;
+  environment?: 'dev' | 'staging' | null;
+  pollIntervalMs?: number;
+  onStatusUpdate?: (status: ScanStatus) => void;
 }
 
 export async function pollScanStatus(
-  params: GetScanStatusParams,
-  pollIntervalMs = 5000
-): Promise<{ status: "done" }> {
+  params: PollScanStatusParams
+): Promise<ScanStatus> {
+  const pollIntervalMs = params.pollIntervalMs ?? 5000;
+
   const sleep = (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
   while (true) {
-    const { status, errorMessage } = await getScanStatus(params);
-    if (status === "error") {
-      throw new Error(`Error occurent during scan: ${errorMessage}`);
+    const status = await getScanStatus({
+      apiKey: params.apiKey,
+      scanId: params.scanId,
+      environment: params.environment,
+    });
+
+    params.onStatusUpdate?.(status);
+
+    if (status.status === 'failed') {
+      throw new Error(`Scan failed: ${status.errorMessage}`);
     }
-    if (status === "done") {
-      return { status };
+
+    if (status.status === 'completed') {
+      return status;
     }
+
+    if (status.status === 'paused') {
+      throw new Error('Scan was paused');
+    }
+
     console.log(
-      `Current scan status: ${status}. Polling again in ${pollIntervalMs}ms...`
+      `Scan ${status.label} status: ${status.status}. Polling again in ${pollIntervalMs / 1000}s...`
     );
     await sleep(pollIntervalMs);
   }
 }
 
-export * as CI from "./ci";
+// High-level scan runner
+export interface RunScanParams {
+  apiKey?: string;
+  projectId?: string;
+  branch?: string;
+  scanLevel?: 'priority' | 'full';
+  environment?: 'dev' | 'staging' | null;
+  wait?: boolean;
+  pollIntervalMs?: number;
+}
+
+export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
+  const apiKey = params.apiKey ?? getApiKeyEnvVar();
+  const projectId = params.projectId ?? getProjectIdEnvVar();
+  const environment = params.environment ?? getEnvironmentEnvVar();
+  const wait = params.wait ?? true;
+
+  console.log(`Dispatching scan for project ${projectId}...`);
+
+  const { scanId, label } = await dispatchScan({
+    apiKey,
+    projectId,
+    branch: params.branch,
+    scanLevel: params.scanLevel,
+    environment,
+  });
+
+  console.log(`Scan ${label} dispatched (ID: ${scanId})`);
+
+  if (!wait) {
+    return {
+      scanId,
+      label,
+      status: 'queued',
+      startedAt: null,
+      completedAt: null,
+      errorMessage: null,
+      issuesCount: 0,
+      reportReady: false,
+    };
+  }
+
+  console.log('Waiting for scan to complete...');
+
+  const finalStatus = await pollScanStatus({
+    apiKey,
+    scanId,
+    environment,
+    pollIntervalMs: params.pollIntervalMs,
+  });
+
+  console.log(`Scan ${label} completed with ${finalStatus.issuesCount} issues`);
+
+  return finalStatus;
+}
+
+export * as CI from './ci';
