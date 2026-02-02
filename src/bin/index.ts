@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { program } from "commander";
-import { CI, type Environment } from "../lib/ci";
+import { CI, type Environment, type SeverityLevel } from "../lib/ci";
 
 program
   .name("pensar")
@@ -20,8 +20,26 @@ program
   .option("-l, --level <level>", "Pentest level: priority or full", "full")
   .option("--no-wait", "Don't wait for pentest to complete")
   .option("-e, --environment <env>", "Environment: dev, staging, or production")
+  .option(
+    "-s, --severity <severity>",
+    "Minimum severity threshold to trigger error (critical, high, medium, low, info). Or set PENSAR_ERROR_SEVERITY_THRESHOLD env var.",
+    undefined
+  )
   .action(async (options) => {
     try {
+      // Get severity threshold from CLI option or env var (defaults to 'critical')
+      const severityThreshold: SeverityLevel = options.severity
+        ? (options.severity.toLowerCase() as SeverityLevel)
+        : CI.getErrorSeverityThresholdEnvVar();
+
+      // Validate severity if provided via CLI
+      if (options.severity && !CI.SEVERITY_LEVELS.includes(severityThreshold)) {
+        console.error(
+          `Invalid severity threshold "${options.severity}". Valid values: ${CI.SEVERITY_LEVELS.join(", ")}`
+        );
+        process.exit(1);
+      }
+
       const result = await CI.runScan({
         projectId: options.project,
         repoId: options.repoId ? parseInt(options.repoId, 10) : undefined,
@@ -29,14 +47,35 @@ program
         scanLevel: options.level as "priority" | "full",
         wait: options.wait,
         environment: options.environment as Environment | undefined,
+        errorSeverityThreshold: severityThreshold,
       });
 
       if (result.status === "completed") {
-        if (result.issuesCount > 0) {
+        // Check for issues at or above the severity threshold
+        const issuesAtThreshold = CI.getIssueCountAtOrAboveThreshold(
+          result.issueCountsBySeverity,
+          severityThreshold
+        );
+
+        if (issuesAtThreshold > 0) {
           console.error(
-            `\n❌ Pentest found ${result.issuesCount} security issues`
+            `\n❌ Pentest found ${issuesAtThreshold} security issue(s) at severity "${severityThreshold}" or higher`
           );
+          if (result.issueCountsBySeverity) {
+            console.error("  Issue breakdown:");
+            for (const level of CI.SEVERITY_LEVELS) {
+              const count = result.issueCountsBySeverity[level];
+              if (count > 0) {
+                console.error(`    ${level}: ${count}`);
+              }
+            }
+          }
           process.exit(1);
+        } else if (result.issuesCount > 0) {
+          // There are issues but none at or above the threshold
+          console.log(
+            `\n✅ Pentest completed. Found ${result.issuesCount} issue(s), but none at severity "${severityThreshold}" or higher.`
+          );
         } else {
           console.log("\n✅ Pentest completed with no issues found");
         }
