@@ -16,7 +16,7 @@ function getGitLabEnvVars() {
   // Check if we should wait for completion
   const wait = process.env.PENSAR_WAIT !== 'false';
 
-  // Scan level from env or default to full
+  // Pentest level from env or default to full
   const scanLevel =
     (process.env.PENSAR_SCAN_LEVEL as 'priority' | 'full') ?? 'full';
 
@@ -31,14 +31,14 @@ function getGitLabEnvVars() {
 }
 
 /**
- * Run a Pensar scan from GitLab CI
+ * Run a Pensar pentest from GitLab CI
  */
 export async function runScan(): Promise<void> {
   try {
     const { apiKey, projectId, branch, environment, wait, scanLevel } =
       getGitLabEnvVars();
 
-    console.log('Starting Pensar security scan from GitLab CI...');
+    console.log('Starting Pensar security pentest from GitLab CI...');
 
     const result = await CI.runScan({
       apiKey,
@@ -51,14 +51,14 @@ export async function runScan(): Promise<void> {
 
     if (result.status === 'completed') {
       if (result.issuesCount > 0) {
-        console.error(`\n❌ Scan found ${result.issuesCount} security issues`);
+        console.error(`\n❌ Pentest found ${result.issuesCount} security issues`);
         process.exit(1);
       } else {
-        console.log('\n✅ Scan completed with no issues found');
+        console.log('\n✅ Pentest completed with no issues found');
       }
     }
   } catch (error) {
-    console.error('Scan failed:', error);
+    console.error('Pentest failed:', error);
     process.exit(1);
   }
 }

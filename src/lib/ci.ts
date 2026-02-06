@@ -2,6 +2,9 @@ import { z } from 'zod';
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Environment type for targeting different Pensar API instances
+export type Environment = 'dev' | 'staging' | 'production' | null;
+
 // Environment helpers
 export function getApiKeyEnvVar(): string {
   if (!process.env.PENSAR_API_KEY)
@@ -17,11 +20,11 @@ export function getProjectIdEnvVar(): string {
   return process.env.PENSAR_PROJECT_ID;
 }
 
-export function getEnvironmentEnvVar(): 'dev' | 'staging' | null {
-  return (process.env.PENSAR_ENVIRONMENT as 'dev' | 'staging') ?? null;
+export function getEnvironmentEnvVar(): Environment {
+  return (process.env.PENSAR_ENVIRONMENT as Environment) ?? null;
 }
 
-export function getApiUrl(environment: 'dev' | 'staging' | null): string {
+export function getApiUrl(environment: Environment): string {
   switch (environment) {
     case 'dev':
       console.warn('Using dev environment');
@@ -29,6 +32,7 @@ export function getApiUrl(environment: 'dev' | 'staging' | null): string {
     case 'staging':
       console.warn('Using staging environment');
       return 'https://staging-api.pensar.dev';
+    case 'production':
     default:
       return 'https://api.pensar.dev';
   }
@@ -62,7 +66,7 @@ export interface DispatchScanParams {
   projectId: string;
   branch?: string;
   scanLevel?: 'priority' | 'full';
-  environment?: 'dev' | 'staging' | null;
+  environment?: Environment;
 }
 
 export async function dispatchScan(
@@ -86,7 +90,7 @@ export async function dispatchScan(
   const json = (await resp.json()) as { error?: string };
 
   if (!resp.ok) {
-    throw new Error(`Error dispatching scan: ${json.error || resp.statusText}`);
+    throw new Error(`Error dispatching pentest: ${json.error || resp.statusText}`);
   }
 
   const result = DispatchScanResponseObject.parse(json);
@@ -96,7 +100,7 @@ export async function dispatchScan(
 export interface GetScanStatusParams {
   apiKey: string;
   scanId: string;
-  environment?: 'dev' | 'staging' | null;
+  environment?: Environment;
 }
 
 export async function getScanStatus(
@@ -115,7 +119,7 @@ export async function getScanStatus(
 
   if (!resp.ok) {
     throw new Error(
-      `Error getting scan status: ${json.error || resp.statusText}`
+      `Error getting pentest status: ${json.error || resp.statusText}`
     );
   }
 
@@ -125,7 +129,7 @@ export async function getScanStatus(
 export interface PollScanStatusParams {
   apiKey: string;
   scanId: string;
-  environment?: 'dev' | 'staging' | null;
+  environment?: Environment;
   pollIntervalMs?: number;
   onStatusUpdate?: (status: ScanStatus) => void;
 }
@@ -148,7 +152,7 @@ export async function pollScanStatus(
     params.onStatusUpdate?.(status);
 
     if (status.status === 'failed') {
-      throw new Error(`Scan failed: ${status.errorMessage}`);
+      throw new Error(`Pentest failed: ${status.errorMessage}`);
     }
 
     if (status.status === 'completed') {
@@ -156,23 +160,23 @@ export async function pollScanStatus(
     }
 
     if (status.status === 'paused') {
-      throw new Error('Scan was paused');
+      throw new Error('Pentest was paused');
     }
 
     console.log(
-      `Scan ${status.label} status: ${status.status}. Polling again in ${pollIntervalMs / 1000}s...`
+      `Pentest ${status.label} status: ${status.status}. Polling again in ${pollIntervalMs / 1000}s...`
     );
     await sleep(pollIntervalMs);
   }
 }
 
-// High-level scan runner
+// High-level pentest runner
 export interface RunScanParams {
   apiKey?: string;
   projectId?: string;
   branch?: string;
   scanLevel?: 'priority' | 'full';
-  environment?: 'dev' | 'staging' | null;
+  environment?: Environment;
   wait?: boolean;
   pollIntervalMs?: number;
 }
@@ -183,7 +187,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const environment = params.environment ?? getEnvironmentEnvVar();
   const wait = params.wait ?? true;
 
-  console.log(`Dispatching scan for project ${projectId}...`);
+  console.log(`Dispatching pentest for project ${projectId}...`);
 
   const { scanId, label } = await dispatchScan({
     apiKey,
@@ -193,7 +197,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     environment,
   });
 
-  console.log(`Scan ${label} dispatched (ID: ${scanId})`);
+  console.log(`Pentest ${label} dispatched (ID: ${scanId})`);
 
   if (!wait) {
     return {
@@ -208,7 +212,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     };
   }
 
-  console.log('Waiting for scan to complete...');
+  console.log('Waiting for pentest to complete...');
 
   const finalStatus = await pollScanStatus({
     apiKey,
@@ -217,7 +221,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     pollIntervalMs: params.pollIntervalMs,
   });
 
-  console.log(`Scan ${label} completed with ${finalStatus.issuesCount} issues`);
+  console.log(`Pentest ${label} completed with ${finalStatus.issuesCount} issues`);
 
   return finalStatus;
 }

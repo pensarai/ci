@@ -1,15 +1,15 @@
-# Pensar Security Scan on Push
-# Runs a security scan whenever code is pushed to main branches
+# Pensar Security Pentest on Push
+# Runs a security pentest whenever code is pushed to main branches
 
-name: Pensar Security Scan (Push)
+name: Pensar Security Pentest (Push)
 
 on:
   push:
     branches: [main, master, develop]
 
 jobs:
-  security-scan:
-    name: Security Scan
+  security-pentest:
+    name: Security Pentest
     runs-on: ubuntu-latest
 
     steps:
@@ -24,8 +24,8 @@ jobs:
       - name: Install Pensar CI
         run: npm install -g @pensar/ci
 
-      - name: Run Pensar Security Scan
+      - name: Run Pensar Security Pentest
         env:
           PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
           PENSAR_PROJECT_ID: ${{ secrets.PENSAR_PROJECT_ID }}
-        run: pensar scan --branch ${{ github.ref_name }}
+        run: pensar pentest --branch ${{ github.ref_name }}

@@ -1,6 +1,6 @@
 # @pensar/ci
 
-Automated security scanning for your CI/CD pipeline.
+Automated security pentesting for your CI/CD pipeline.
 
 ## Installation
 
@@ -11,34 +11,36 @@ npm install @pensar/ci
 ## Usage
 
 ```bash
-# Run a security scan
-pensar scan --project <project-id>
+# Run a security pentest
+pensar pentest --project <project-id>
 
-# Check scan status
+# Check pentest status
 pensar status <scan-id>
 ```
 
 ### Options
 
-| Option          | Description                             |
-| --------------- | --------------------------------------- |
-| `-p, --project` | Project ID (or set `PENSAR_PROJECT_ID`) |
-| `-b, --branch`  | Branch to scan                          |
-| `-l, --level`   | Scan level: `priority` or `full`        |
-| `--no-wait`     | Don't wait for scan to complete         |
+| Option                | Description                                        |
+| --------------------- | -------------------------------------------------- |
+| `-p, --project`       | Project ID (or set `PENSAR_PROJECT_ID`)            |
+| `-b, --branch`        | Branch to pentest                                  |
+| `-l, --level`         | Pentest level: `priority` or `full`                |
+| `-e, --environment`   | Target environment: `dev`, `staging`, or `production` |
+| `--no-wait`           | Don't wait for pentest to complete                 |
 
 ## Environment Variables
 
-| Variable            | Description            |
-| ------------------- | ---------------------- |
-| `PENSAR_API_KEY`    | Your Pensar API key    |
-| `PENSAR_PROJECT_ID` | Your Pensar project ID |
+| Variable              | Description                                            |
+| --------------------- | ------------------------------------------------------ |
+| `PENSAR_API_KEY`      | Your Pensar API key                                    |
+| `PENSAR_PROJECT_ID`   | Your Pensar project ID                                 |
+| `PENSAR_ENVIRONMENT`  | Target environment (`dev`, `staging`, or `production`) |
 
 ## CI/CD Integration
 
 See [`examples/`](./examples) for ready-to-use workflows:
 
-- **GitHub Actions** — scan on PR, push, or after deploy
+- **GitHub Actions** — pentest on PR, push, or after deploy
 - **GitLab CI** — merge request and pipeline triggers
 
 ## License

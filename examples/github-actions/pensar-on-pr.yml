@@ -1,15 +1,15 @@
-# Pensar Security Scan on Pull Request
-# Runs a security scan whenever a pull request is opened or updated
+# Pensar Security Pentest on Pull Request
+# Runs a security pentest whenever a pull request is opened or updated
 
-name: Pensar Security Scan (PR)
+name: Pensar Security Pentest (PR)
 
 on:
   pull_request:
     branches: [main, master, develop]
 
 jobs:
-  security-scan:
-    name: Security Scan
+  security-pentest:
+    name: Security Pentest
     runs-on: ubuntu-latest
 
     steps:
@@ -24,8 +24,8 @@ jobs:
       - name: Install Pensar CI
         run: npm install -g @pensar/ci
 
-      - name: Run Pensar Security Scan
+      - name: Run Pensar Security Pentest
         env:
           PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
           PENSAR_PROJECT_ID: ${{ secrets.PENSAR_PROJECT_ID }}
-        run: pensar scan --branch ${{ github.head_ref }}
+        run: pensar pentest --branch ${{ github.head_ref }}
