@@ -5,6 +5,10 @@ dotenv.config();
 // Environment type for targeting different Pensar API instances
 export type Environment = "dev" | "staging" | "production" | null;
 
+// Severity levels in order from most to least severe
+export const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low', 'info'] as const;
+export type SeverityLevel = (typeof SEVERITY_LEVELS)[number];
+
 // Environment helpers
 export function getApiKeyEnvVar(): string {
   if (!process.env.PENSAR_API_KEY)
@@ -29,6 +33,21 @@ export function getEnvironmentEnvVar(): Environment {
   return (process.env.PENSAR_ENVIRONMENT as Environment) ?? null;
 }
 
+export function getErrorSeverityThresholdEnvVar(): SeverityLevel {
+  const value = process.env.PENSAR_ERROR_SEVERITY_THRESHOLD;
+  if (!value) return 'critical'; // Default to critical
+  
+  const normalized = value.toLowerCase() as SeverityLevel;
+  if (!SEVERITY_LEVELS.includes(normalized)) {
+    console.warn(
+      `Invalid severity threshold "${value}". Valid values: ${SEVERITY_LEVELS.join(', ')}. Defaulting to "critical".`
+    );
+    return 'critical';
+  }
+  
+  return normalized;
+}
+
 export function getApiUrl(environment: Environment): string {
   switch (environment) {
     case "dev":
@@ -51,6 +70,16 @@ const DispatchScanResponseObject = z.object({
   error: z.string().optional(),
 });
 
+const IssueCountsBySeverityObject = z.object({
+  critical: z.number().default(0),
+  high: z.number().default(0),
+  medium: z.number().default(0),
+  low: z.number().default(0),
+  info: z.number().default(0),
+});
+
+export type IssueCountsBySeverity = z.infer<typeof IssueCountsBySeverityObject>;
+
 const ScanStatusResponseObject = z.object({
   scanId: z.string(),
   label: z.string(),
@@ -59,11 +88,32 @@ const ScanStatusResponseObject = z.object({
   completedAt: z.string().nullable(),
   errorMessage: z.string().nullable(),
   issuesCount: z.number(),
+  issueCountsBySeverity: IssueCountsBySeverityObject.optional(),
   reportReady: z.boolean(),
   error: z.string().optional(),
 });
 
 export type ScanStatus = z.infer<typeof ScanStatusResponseObject>;
+
+// Helper function to count issues at or above a severity threshold
+export function getIssueCountAtOrAboveThreshold(
+  issueCountsBySeverity: IssueCountsBySeverity | undefined,
+  threshold: SeverityLevel
+): number {
+  if (!issueCountsBySeverity) {
+    return 0;
+  }
+  
+  const thresholdIndex = SEVERITY_LEVELS.indexOf(threshold);
+  let count = 0;
+  
+  for (let i = 0; i <= thresholdIndex; i++) {
+    const severity = SEVERITY_LEVELS[i];
+    count += issueCountsBySeverity[severity];
+  }
+  
+  return count;
+}
 
 // API Client
 export interface DispatchScanParams {
@@ -198,6 +248,7 @@ export interface RunScanParams {
   environment?: Environment;
   wait?: boolean;
   pollIntervalMs?: number;
+  errorSeverityThreshold?: SeverityLevel;
 }
 
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
