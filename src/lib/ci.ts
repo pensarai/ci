@@ -1,23 +1,28 @@
-import { z } from 'zod';
-import dotenv from 'dotenv';
+import { z } from "zod";
+import dotenv from "dotenv";
 dotenv.config();
 
 // Environment type for targeting different Pensar API instances
-export type Environment = 'dev' | 'staging' | 'production' | null;
+export type Environment = "dev" | "staging" | "production" | null;
 
 // Environment helpers
 export function getApiKeyEnvVar(): string {
   if (!process.env.PENSAR_API_KEY)
-    throw new Error('PENSAR_API_KEY not configured');
+    throw new Error("PENSAR_API_KEY not configured");
 
   return process.env.PENSAR_API_KEY;
 }
 
-export function getProjectIdEnvVar(): string {
-  if (!process.env.PENSAR_PROJECT_ID)
-    throw new Error('PENSAR_PROJECT_ID not configured');
-
+export function getProjectIdEnvVar(): string | undefined {
   return process.env.PENSAR_PROJECT_ID;
+}
+
+export function getRepoIdEnvVar(): number | undefined {
+  const val = process.env.GITHUB_REPOSITORY_ID;
+  if (!val) return undefined;
+  const parsed = parseInt(val, 10);
+  if (isNaN(parsed)) return undefined;
+  return parsed;
 }
 
 export function getEnvironmentEnvVar(): Environment {
@@ -26,15 +31,15 @@ export function getEnvironmentEnvVar(): Environment {
 
 export function getApiUrl(environment: Environment): string {
   switch (environment) {
-    case 'dev':
-      console.warn('Using dev environment');
-      return 'https://josh-pensar-api.pensar.dev';
-    case 'staging':
-      console.warn('Using staging environment');
-      return 'https://staging-api.pensar.dev';
-    case 'production':
+    case "dev":
+      console.warn("Using dev environment");
+      return "https://josh-pensar-api.pensar.dev";
+    case "staging":
+      console.warn("Using staging environment");
+      return "https://staging-api.pensar.dev";
+    case "production":
     default:
-      return 'https://api.pensar.dev';
+      return "https://api.pensar.dev";
   }
 }
 
@@ -49,7 +54,7 @@ const DispatchScanResponseObject = z.object({
 const ScanStatusResponseObject = z.object({
   scanId: z.string(),
   label: z.string(),
-  status: z.enum(['queued', 'running', 'completed', 'failed', 'paused']),
+  status: z.enum(["queued", "running", "completed", "failed", "paused"]),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
   errorMessage: z.string().nullable(),
@@ -63,25 +68,34 @@ export type ScanStatus = z.infer<typeof ScanStatusResponseObject>;
 // API Client
 export interface DispatchScanParams {
   apiKey: string;
-  projectId: string;
+  projectId?: string;
+  repoId?: number;
   branch?: string;
-  scanLevel?: 'priority' | 'full';
+  scanLevel?: "priority" | "full";
   environment?: Environment;
 }
 
 export async function dispatchScan(
   params: DispatchScanParams
 ): Promise<{ scanId: string; label: string }> {
+  if (!params.projectId && !params.repoId) {
+    throw new Error(
+      "Either projectId or repoId must be provided. Set PENSAR_PROJECT_ID or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID)."
+    );
+  }
+
   const apiUrl = getApiUrl(params.environment ?? null);
 
   const resp = await fetch(`${apiUrl}/ci/dispatch`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': params.apiKey,
+      "Content-Type": "application/json",
+      "x-api-key": params.apiKey,
     },
     body: JSON.stringify({
-      projectId: params.projectId,
+      ...(params.projectId
+        ? { projectId: params.projectId }
+        : { repoId: params.repoId }),
       branch: params.branch,
       scanLevel: params.scanLevel,
     }),
@@ -90,7 +104,9 @@ export async function dispatchScan(
   const json = (await resp.json()) as { error?: string };
 
   if (!resp.ok) {
-    throw new Error(`Error dispatching pentest: ${json.error || resp.statusText}`);
+    throw new Error(
+      `Error dispatching pentest: ${json.error || resp.statusText}`
+    );
   }
 
   const result = DispatchScanResponseObject.parse(json);
@@ -109,9 +125,9 @@ export async function getScanStatus(
   const apiUrl = getApiUrl(params.environment ?? null);
 
   const resp = await fetch(`${apiUrl}/ci/status/${params.scanId}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'x-api-key': params.apiKey,
+      "x-api-key": params.apiKey,
     },
   });
 
@@ -151,20 +167,22 @@ export async function pollScanStatus(
 
     params.onStatusUpdate?.(status);
 
-    if (status.status === 'failed') {
+    if (status.status === "failed") {
       throw new Error(`Pentest failed: ${status.errorMessage}`);
     }
 
-    if (status.status === 'completed') {
+    if (status.status === "completed") {
       return status;
     }
 
-    if (status.status === 'paused') {
-      throw new Error('Pentest was paused');
+    if (status.status === "paused") {
+      throw new Error("Pentest was paused");
     }
 
     console.log(
-      `Pentest ${status.label} status: ${status.status}. Polling again in ${pollIntervalMs / 1000}s...`
+      `Pentest ${status.label} status: ${status.status}. Polling again in ${
+        pollIntervalMs / 1000
+      }s...`
     );
     await sleep(pollIntervalMs);
   }
@@ -174,8 +192,9 @@ export async function pollScanStatus(
 export interface RunScanParams {
   apiKey?: string;
   projectId?: string;
+  repoId?: number;
   branch?: string;
-  scanLevel?: 'priority' | 'full';
+  scanLevel?: "priority" | "full";
   environment?: Environment;
   wait?: boolean;
   pollIntervalMs?: number;
@@ -184,14 +203,23 @@ export interface RunScanParams {
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const apiKey = params.apiKey ?? getApiKeyEnvVar();
   const projectId = params.projectId ?? getProjectIdEnvVar();
+  const repoId = params.repoId ?? getRepoIdEnvVar();
   const environment = params.environment ?? getEnvironmentEnvVar();
   const wait = params.wait ?? true;
 
-  console.log(`Dispatching pentest for project ${projectId}...`);
+  if (!projectId && !repoId) {
+    throw new Error(
+      "No project identifier found. Either set PENSAR_PROJECT_ID, pass --project, or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected)."
+    );
+  }
+
+  const identifier = projectId ? `project ${projectId}` : `repo ${repoId}`;
+  console.log(`Dispatching pentest for ${identifier}...`);
 
   const { scanId, label } = await dispatchScan({
     apiKey,
     projectId,
+    repoId,
     branch: params.branch,
     scanLevel: params.scanLevel,
     environment,
@@ -203,7 +231,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     return {
       scanId,
       label,
-      status: 'queued',
+      status: "queued",
       startedAt: null,
       completedAt: null,
       errorMessage: null,
@@ -212,7 +240,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     };
   }
 
-  console.log('Waiting for pentest to complete...');
+  console.log("Waiting for pentest to complete...");
 
   const finalStatus = await pollScanStatus({
     apiKey,
@@ -221,9 +249,11 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     pollIntervalMs: params.pollIntervalMs,
   });
 
-  console.log(`Pentest ${label} completed with ${finalStatus.issuesCount} issues`);
+  console.log(
+    `Pentest ${label} completed with ${finalStatus.issuesCount} issues`
+  );
 
   return finalStatus;
 }
 
-export * as CI from './ci';
+export * as CI from "./ci";

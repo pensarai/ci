@@ -63,7 +63,7 @@ Options:
 
 ## Exit Codes
 
-| Code | Meaning                                |
-| ---- | -------------------------------------- |
-| 0    | Pentest completed with no issues       |
+| Code | Meaning                                 |
+| ---- | --------------------------------------- |
+| 0    | Pentest completed with no issues        |
 | 1    | Pentest found security issues or failed |

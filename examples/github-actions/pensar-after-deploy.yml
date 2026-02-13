@@ -5,7 +5,7 @@ name: Pensar Security Pentest (Post-Deploy)
 
 on:
   workflow_run:
-    workflows: ['Deploy to Production'] # Replace with your deployment workflow name
+    workflows: ["Deploy to Production"] # Replace with your deployment workflow name
     types:
       - completed
     branches: [main, master]
@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Pensar CI
         run: npm install -g @pensar/ci
