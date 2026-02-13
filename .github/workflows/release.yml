@@ -1,13 +1,13 @@
 # Release Workflow
-# Triggered on version tags (v*.*.*) - publishes to npm and creates GitHub release
-# Uses npm OIDC authentication for secure, tokenless publishing
+# Triggered on pushes to main - publishes to npm when package.json version changes
+# Automatically creates a git tag and GitHub release
 
 name: Release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger for re-runs
 
 permissions:
   contents: write
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   release:
-    name: Build & Release
+    name: Release
     runs-on: ubuntu-latest
 
     steps:
@@ -30,45 +30,68 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Check if version is already published
+        id: check
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+          echo "package=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+
+          # Check if this version already exists on npm
+          PUBLISHED_VERSION=$(npm view "$PACKAGE_NAME@$LOCAL_VERSION" version 2>/dev/null || echo "")
+
+          if [ "$PUBLISHED_VERSION" = "$LOCAL_VERSION" ]; then
+            echo "Version $LOCAL_VERSION is already published — skipping release."
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version $LOCAL_VERSION is not yet published — will release."
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install dependencies
+        if: steps.check.outputs.should_publish == 'true'
         run: npm ci
 
       - name: Build
+        if: steps.check.outputs.should_publish == 'true'
         run: npm run build
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Verify package version matches tag
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION=${{ steps.version.outputs.VERSION }}
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: package.json version ($PACKAGE_VERSION) does not match tag version ($TAG_VERSION)"
-            exit 1
-          fi
-
       - name: Publish to npm
+        if: steps.check.outputs.should_publish == 'true'
         run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Create and push git tag
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          TAG="v${{ steps.check.outputs.version }}"
+
+          # Check if the tag already exists on the remote
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists on remote — skipping."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG" 2>/dev/null || echo "Tag $TAG already exists locally"
+            git push origin "$TAG"
+          fi
+
       - name: Generate release notes
-        id: release_notes
+        if: steps.check.outputs.should_publish == 'true'
         run: |
           # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$PREV_TAG" ]; then
-            echo "Generating changelog from $PREV_TAG to ${{ github.ref_name }}"
-            COMMITS=$(git log --pretty=format:"- %s (%h)" $PREV_TAG..${{ github.ref_name }} --no-merges)
+            echo "Generating changelog from $PREV_TAG to v${{ steps.check.outputs.version }}"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD --no-merges)
           else
             echo "No previous tag found, listing recent commits"
-            COMMITS=$(git log --pretty=format:"- %s (%h)" -10 --no-merges)
+            COMMITS=$(git log --pretty=format:"- %s (%h)" -20 --no-merges)
           fi
 
-          # Write to file to handle multiline
           echo "## What's Changed" > release_notes.md
           echo "" >> release_notes.md
           echo "$COMMITS" >> release_notes.md
@@ -76,16 +99,18 @@ jobs:
           echo "## Installation" >> release_notes.md
           echo "" >> release_notes.md
           echo '```bash' >> release_notes.md
-          echo "npm install @pensar/ci@${{ steps.version.outputs.VERSION }}" >> release_notes.md
+          echo "npm install ${{ steps.check.outputs.package }}@${{ steps.check.outputs.version }}" >> release_notes.md
           echo '```' >> release_notes.md
 
       - name: Create GitHub Release
+        if: steps.check.outputs.should_publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: v${{ steps.version.outputs.VERSION }}
+          tag_name: v${{ steps.check.outputs.version }}
+          name: v${{ steps.check.outputs.version }}
           body_path: release_notes.md
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(steps.check.outputs.version, '-') }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
