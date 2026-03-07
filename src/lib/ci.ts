@@ -33,6 +33,16 @@ export function getEnvironmentEnvVar(): Environment {
   return (process.env.PENSAR_ENVIRONMENT as Environment) ?? null;
 }
 
+export function getCommitShaEnvVar(): string | undefined {
+  return (
+    process.env.GITHUB_SHA ??
+    process.env.CI_COMMIT_SHA ??
+    process.env.BITBUCKET_COMMIT ??
+    process.env.PENSAR_COMMIT_SHA ??
+    undefined
+  );
+}
+
 export function getErrorSeverityThresholdEnvVar(): SeverityLevel {
   const value = process.env.PENSAR_ERROR_SEVERITY_THRESHOLD;
   if (!value) return 'critical'; // Default to critical
@@ -123,6 +133,7 @@ export interface DispatchScanParams {
   branch?: string;
   scanLevel?: "priority" | "full";
   environment?: Environment;
+  commitSha?: string;
 }
 
 export async function dispatchScan(
@@ -148,6 +159,7 @@ export async function dispatchScan(
         : { repoId: params.repoId }),
       branch: params.branch,
       scanLevel: params.scanLevel,
+      commitSha: params.commitSha,
     }),
   });
 
@@ -249,6 +261,7 @@ export interface RunScanParams {
   wait?: boolean;
   pollIntervalMs?: number;
   errorSeverityThreshold?: SeverityLevel;
+  commitSha?: string;
 }
 
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
@@ -257,6 +270,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const repoId = params.repoId ?? getRepoIdEnvVar();
   const environment = params.environment ?? getEnvironmentEnvVar();
   const wait = params.wait ?? true;
+  const commitSha = params.commitSha ?? getCommitShaEnvVar();
 
   if (!projectId && !repoId) {
     throw new Error(
@@ -274,6 +288,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     branch: params.branch,
     scanLevel: params.scanLevel,
     environment,
+    commitSha,
   });
 
   console.log(`Pentest ${label} dispatched (ID: ${scanId})`);
