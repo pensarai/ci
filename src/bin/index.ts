@@ -21,6 +21,10 @@ program
   .option("--no-wait", "Don't wait for pentest to complete")
   .option("-e, --environment <env>", "Environment: dev, staging, or production")
   .option(
+    "-c, --commit <sha>",
+    "Commit SHA (auto-detected from GITHUB_SHA, CI_COMMIT_SHA, BITBUCKET_COMMIT, or PENSAR_COMMIT_SHA)"
+  )
+  .option(
     "-s, --severity <severity>",
     "Minimum severity threshold to trigger error (critical, high, medium, low, info). Or set PENSAR_ERROR_SEVERITY_THRESHOLD env var.",
     undefined
@@ -48,6 +52,7 @@ program
         wait: options.wait,
         environment: options.environment as Environment | undefined,
         errorSeverityThreshold: severityThreshold,
+        commitSha: options.commit,
       });
 
       if (result.status === "completed") {

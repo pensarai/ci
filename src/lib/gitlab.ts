@@ -13,6 +13,9 @@ function getGitLabEnvVars() {
   // GitLab CI provides the branch name in CI_COMMIT_REF_NAME
   const branch = process.env.CI_COMMIT_REF_NAME ?? undefined;
 
+  // GitLab CI provides the commit SHA in CI_COMMIT_SHA
+  const commitSha = process.env.CI_COMMIT_SHA ?? undefined;
+
   // Check if we should wait for completion
   const wait = process.env.PENSAR_WAIT !== "false";
 
@@ -27,6 +30,7 @@ function getGitLabEnvVars() {
     environment,
     wait,
     scanLevel,
+    commitSha,
   };
 }
 
@@ -35,7 +39,7 @@ function getGitLabEnvVars() {
  */
 export async function runScan(): Promise<void> {
   try {
-    const { apiKey, projectId, branch, environment, wait, scanLevel } =
+    const { apiKey, projectId, branch, environment, wait, scanLevel, commitSha } =
       getGitLabEnvVars();
 
     console.log("Starting Pensar security pentest from GitLab CI...");
@@ -47,6 +51,7 @@ export async function runScan(): Promise<void> {
       scanLevel,
       environment,
       wait,
+      commitSha,
     });
 
     if (result.status === "completed") {
