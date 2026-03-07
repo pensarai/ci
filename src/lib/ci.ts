@@ -35,10 +35,10 @@ export function getEnvironmentEnvVar(): Environment {
 
 export function getCommitShaEnvVar(): string | undefined {
   return (
+    process.env.PENSAR_COMMIT_SHA ??
     process.env.GITHUB_SHA ??
     process.env.CI_COMMIT_SHA ??
     process.env.BITBUCKET_COMMIT ??
-    process.env.PENSAR_COMMIT_SHA ??
     undefined
   );
 }
