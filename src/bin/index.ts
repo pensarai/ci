@@ -18,6 +18,7 @@ program
   )
   .option("-b, --branch <branch>", "Branch to pentest")
   .option("-l, --level <level>", "Pentest level: priority or full", "full")
+  .option("--quick", "Run a quick pentest (highest-risk endpoints only, ~15 mins). Shorthand for --level priority")
   .option("--no-wait", "Don't wait for pentest to complete")
   .option("-e, --environment <env>", "Environment: dev, staging, or production")
   .option(
@@ -44,11 +45,15 @@ program
         process.exit(1);
       }
 
+      const scanLevel: "priority" | "full" = options.quick
+        ? "priority"
+        : (options.level as "priority" | "full");
+
       const result = await CI.runScan({
         projectId: options.project,
         repoId: options.repoId ? parseInt(options.repoId, 10) : undefined,
         branch: options.branch,
-        scanLevel: options.level as "priority" | "full",
+        scanLevel,
         wait: options.wait,
         environment: options.environment as Environment | undefined,
         errorSeverityThreshold: severityThreshold,
