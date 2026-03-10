@@ -11,8 +11,11 @@ npm install @pensar/ci
 ## Usage
 
 ```bash
-# Run a security pentest
+# Run a security pentest (full scan, all endpoints)
 pensar pentest --project <project-id>
+
+# Run a quick pentest (highest-risk endpoints only, ~15 mins)
+pensar pentest --project <project-id> --quick
 
 # Check pentest status
 pensar status <scan-id>
@@ -24,7 +27,8 @@ pensar status <scan-id>
 | ------------------- | --------------------------------------------------------------------------- |
 | `-p, --project`     | Project ID (or set `PENSAR_PROJECT_ID`)                                     |
 | `-b, --branch`      | Branch to pentest                                                           |
-| `-l, --level`       | Pentest level: `priority` or `full`                                         |
+| `-l, --level`       | Pentest level: `priority` or `full` (default: `full`)                       |
+| `--quick`           | Shorthand for `--level priority`. Tests highest-risk endpoints only (~15 mins) |
 | `-e, --environment` | Target environment: `dev`, `staging`, or `production`                       |
 | `-c, --commit`      | Commit SHA (auto-detected from CI env vars, or set `PENSAR_COMMIT_SHA`)     |
 | `-s, --severity`    | Minimum severity threshold to error on (or set `PENSAR_ERROR_SEVERITY_THRESHOLD`) |
