@@ -90,6 +90,11 @@ const IssueCountsBySeverityObject = z.object({
 
 export type IssueCountsBySeverity = z.infer<typeof IssueCountsBySeverityObject>;
 
+const ScanProgressObject = z.object({
+  completedEndpoints: z.number(),
+  totalEndpoints: z.number(),
+});
+
 const ScanStatusResponseObject = z.object({
   scanId: z.string(),
   label: z.string(),
@@ -101,6 +106,7 @@ const ScanStatusResponseObject = z.object({
   issueCountsBySeverity: IssueCountsBySeverityObject.optional(),
   reportReady: z.boolean(),
   error: z.string().optional(),
+  progress: ScanProgressObject.optional(),
 });
 
 export type ScanStatus = z.infer<typeof ScanStatusResponseObject>;
@@ -212,10 +218,27 @@ export interface PollScanStatusParams {
   onStatusUpdate?: (status: ScanStatus) => void;
 }
 
+function renderProgressBar(
+  label: string,
+  completed: number,
+  total: number,
+  barWidth = 30
+): void {
+  const ratio = total > 0 ? completed / total : 0;
+  const percent = Math.round(ratio * 100);
+  const filled = Math.round(ratio * barWidth);
+  const empty = barWidth - filled;
+  const bar = "█".repeat(filled) + "░".repeat(empty);
+  const line = `  ${label} ${bar} ${percent}% (${completed}/${total} endpoints)`;
+
+  process.stdout.write(`\r${line}`);
+}
+
 export async function pollScanStatus(
   params: PollScanStatusParams
 ): Promise<ScanStatus> {
   const pollIntervalMs = params.pollIntervalMs ?? 5000;
+  let progressShown = false;
 
   const sleep = (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms));
@@ -229,23 +252,34 @@ export async function pollScanStatus(
 
     params.onStatusUpdate?.(status);
 
+    if (status.progress && status.progress.totalEndpoints > 0) {
+      renderProgressBar(
+        status.label,
+        status.progress.completedEndpoints,
+        status.progress.totalEndpoints
+      );
+      progressShown = true;
+    } else if (!progressShown) {
+      process.stdout.write(
+        `\r  ${status.label} status: ${status.status}...`
+      );
+    }
+
     if (status.status === "failed") {
+      if (progressShown) process.stdout.write("\n");
       throw new Error(`Pentest failed: ${status.errorMessage}`);
     }
 
     if (status.status === "completed") {
+      if (progressShown) process.stdout.write("\n");
       return status;
     }
 
     if (status.status === "paused") {
+      if (progressShown) process.stdout.write("\n");
       throw new Error("Pentest was paused");
     }
 
-    console.log(
-      `Pentest ${status.label} status: ${status.status}. Polling again in ${
-        pollIntervalMs / 1000
-      }s...`
-    );
     await sleep(pollIntervalMs);
   }
 }
