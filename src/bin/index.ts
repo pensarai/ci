@@ -20,6 +20,7 @@ program
   .option("-l, --level <level>", "Pentest level: priority or full", "full")
   .option("--quick", "Run a quick pentest (highest-risk endpoints only, ~15 mins). Shorthand for --level priority")
   .option("--no-wait", "Don't wait for pentest to complete")
+  .option("-u, --url <url>", "Deploy preview URL to pentest against")
   .option("-e, --environment <env>", "Environment: dev, staging, or production")
   .option(
     "-c, --commit <sha>",
@@ -45,6 +46,15 @@ program
         process.exit(1);
       }
 
+      if (options.url) {
+        try {
+          new URL(options.url);
+        } catch {
+          console.error(`Invalid URL: "${options.url}"`);
+          process.exit(1);
+        }
+      }
+
       const scanLevel: "priority" | "full" = options.quick
         ? "priority"
         : (options.level as "priority" | "full");
@@ -58,6 +68,7 @@ program
         environment: options.environment as Environment | undefined,
         errorSeverityThreshold: severityThreshold,
         commitSha: options.commit,
+        targetUrl: options.url,
       });
 
       if (result.status === "completed") {
