@@ -140,6 +140,7 @@ export interface DispatchScanParams {
   scanLevel?: "priority" | "full";
   environment?: Environment;
   commitSha?: string;
+  targetUrl?: string;
 }
 
 export async function dispatchScan(
@@ -166,6 +167,7 @@ export async function dispatchScan(
       branch: params.branch,
       scanLevel: params.scanLevel,
       commitSha: params.commitSha,
+      ...(params.targetUrl && { targetUrl: params.targetUrl }),
     }),
   });
 
@@ -296,6 +298,7 @@ export interface RunScanParams {
   pollIntervalMs?: number;
   errorSeverityThreshold?: SeverityLevel;
   commitSha?: string;
+  targetUrl?: string;
 }
 
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
@@ -323,6 +326,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     scanLevel: params.scanLevel,
     environment,
     commitSha,
+    targetUrl: params.targetUrl,
   });
 
   console.log(`Pentest ${label} dispatched (ID: ${scanId})`);
