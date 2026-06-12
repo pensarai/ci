@@ -148,7 +148,7 @@ export async function dispatchScan(
 ): Promise<{ scanId: string; label: string }> {
   if (!params.projectId && !params.repoId) {
     throw new Error(
-      "Either projectId or repoId must be provided. Set PENSAR_PROJECT_ID or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID)."
+      "A repoId is required (pass --repo-id or run in GitHub Actions, where GITHUB_REPOSITORY_ID is auto-detected). The legacy projectId / PENSAR_PROJECT_ID is also accepted."
     );
   }
 
@@ -311,7 +311,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
 
   if (!projectId && !repoId) {
     throw new Error(
-      "No project identifier found. Either set PENSAR_PROJECT_ID, pass --project, or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected)."
+      "No repository identifier found. Pass --repo-id, run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected), or set the legacy PENSAR_PROJECT_ID / --project."
     );
   }
 

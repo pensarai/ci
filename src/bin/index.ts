@@ -11,10 +11,13 @@ program
 program
   .command("pentest")
   .description("Trigger a security pentest")
-  .option("-p, --project <projectId>", "Project ID (or set PENSAR_PROJECT_ID)")
   .option(
     "-r, --repo-id <repoId>",
-    "Repository ID (auto-detected in GitHub Actions via GITHUB_REPOSITORY_ID)"
+    "Repository ID — scopes the pentest to one repo's applications (auto-detected in GitHub Actions via GITHUB_REPOSITORY_ID)"
+  )
+  .option(
+    "-p, --project <projectId>",
+    "(legacy) Project ID (or set PENSAR_PROJECT_ID). Prefer --repo-id; projects were folded into workspaces."
   )
   .option("-b, --branch <branch>", "Branch to pentest")
   .option("-l, --level <level>", "Pentest level: priority or full", "full")
