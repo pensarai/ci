@@ -146,12 +146,8 @@ export interface DispatchScanParams {
 export async function dispatchScan(
   params: DispatchScanParams
 ): Promise<{ scanId: string; label: string }> {
-  if (!params.projectId && !params.repoId) {
-    throw new Error(
-      "Either projectId or repoId must be provided. Set PENSAR_PROJECT_ID or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID)."
-    );
-  }
-
+  // No repo id required: the API key resolves to a workspace (workspace-wide
+  // scan); a repoId narrows it to one repo.
   const apiUrl = getApiUrl(params.environment ?? null);
 
   const resp = await fetch(`${apiUrl}/ci/dispatch`, {
@@ -161,9 +157,10 @@ export async function dispatchScan(
       "x-api-key": params.apiKey,
     },
     body: JSON.stringify({
-      ...(params.projectId
-        ? { projectId: params.projectId }
-        : { repoId: params.repoId }),
+      // V2 scopes by workspace (API key) + optional repoId. projectId is
+      // ignored server-side; never let it shadow repoId.
+      ...(params.repoId !== undefined ? { repoId: params.repoId } : {}),
+      ...(params.projectId ? { projectId: params.projectId } : {}),
       branch: params.branch,
       scanLevel: params.scanLevel,
       commitSha: params.commitSha,
@@ -309,13 +306,12 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const wait = params.wait ?? true;
   const commitSha = params.commitSha ?? getCommitShaEnvVar();
 
-  if (!projectId && !repoId) {
-    throw new Error(
-      "No project identifier found. Either set PENSAR_PROJECT_ID, pass --project, or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected)."
-    );
-  }
-
-  const identifier = projectId ? `project ${projectId}` : `repo ${repoId}`;
+  const identifier =
+    repoId !== undefined
+      ? `repo ${repoId}`
+      : projectId
+        ? `project ${projectId}`
+        : "workspace";
   console.log(`Dispatching pentest for ${identifier}...`);
 
   const { scanId, label } = await dispatchScan({

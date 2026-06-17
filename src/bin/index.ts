@@ -6,15 +6,18 @@ import { CI, type Environment, type SeverityLevel } from "../lib/ci";
 program
   .name("pensar")
   .description("Pensar CI - Security scanning for your CI/CD pipeline")
-  .version("1.2.0");
+  .version("2.4.0");
 
 program
   .command("pentest")
   .description("Trigger a security pentest")
-  .option("-p, --project <projectId>", "Project ID (or set PENSAR_PROJECT_ID)")
   .option(
     "-r, --repo-id <repoId>",
-    "Repository ID (auto-detected in GitHub Actions via GITHUB_REPOSITORY_ID)"
+    "Repository ID to scope the pentest to (auto-detected in GitHub Actions via GITHUB_REPOSITORY_ID). Omit to scan the whole workspace."
+  )
+  .option(
+    "-p, --project <projectId>",
+    "Deprecated: ignored by Console V2 (projects were folded into workspaces). The API key determines the workspace."
   )
   .option("-b, --branch <branch>", "Branch to pentest")
   .option("-l, --level <level>", "Pentest level: priority or full", "full")

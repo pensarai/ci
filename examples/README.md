@@ -6,15 +6,17 @@ Example workflows for integrating Pensar security pentesting into your CI/CD pip
 
 Before using these examples, you'll need:
 
-1. A Pensar account and API key
-2. Your project ID from the Pensar console
+1. A Pensar account and API key (the key determines the workspace to scan)
+
+In GitHub Actions the repository is auto-detected (`GITHUB_REPOSITORY_ID`) and
+the scan is scoped to it. Elsewhere, omit the repo to scan the whole workspace
+or pass `--repo-id`.
 
 ### Required Secrets
 
-| Secret              | Description            |
-| ------------------- | ---------------------- |
-| `PENSAR_API_KEY`    | Your Pensar API key    |
-| `PENSAR_PROJECT_ID` | Your Pensar project ID |
+| Secret           | Description                                    |
+| ---------------- | ---------------------------------------------- |
+| `PENSAR_API_KEY` | Your Pensar API key (determines the workspace) |
 
 ## GitHub Actions
 
@@ -54,10 +56,14 @@ Example GitLab CI jobs for:
 pensar pentest [options]
 
 Options:
-  -p, --project <projectId>  Project ID (or set PENSAR_PROJECT_ID env var)
+  -r, --repo-id <repoId>     Repository to scope to (auto-detected in GitHub
+                             Actions via GITHUB_REPOSITORY_ID). Omit to scan
+                             the whole workspace.
   -b, --branch <branch>      Branch to pentest
   -l, --level <level>        Pentest level: priority or full (default: full)
+  -u, --url <url>            Deploy-preview URL to pentest against
   -e, --environment <env>    Target environment: dev, staging, or production
+  -s, --severity <severity>  Minimum severity threshold to error on
   --no-wait                  Don't wait for pentest to complete
 ```
 
