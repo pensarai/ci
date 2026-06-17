@@ -146,12 +146,9 @@ export interface DispatchScanParams {
 export async function dispatchScan(
   params: DispatchScanParams
 ): Promise<{ scanId: string; label: string }> {
-  if (!params.projectId && !params.repoId) {
-    throw new Error(
-      "Either projectId or repoId must be provided. Set PENSAR_PROJECT_ID or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID)."
-    );
-  }
-
+  // No repo identifier is required: the API key resolves to a workspace and
+  // the scan falls back to workspace-wide. A repoId (GITHUB_REPOSITORY_ID)
+  // narrows it to one repository's apps.
   const apiUrl = getApiUrl(params.environment ?? null);
 
   const resp = await fetch(`${apiUrl}/ci/dispatch`, {
@@ -161,9 +158,12 @@ export async function dispatchScan(
       "x-api-key": params.apiKey,
     },
     body: JSON.stringify({
-      ...(params.projectId
-        ? { projectId: params.projectId }
-        : { repoId: params.repoId }),
+      // Console V2 scopes by workspace (from the API key) + optional repo.
+      // Always send repoId when present so repo-scoping isn't shadowed.
+      // projectId is accepted-but-ignored server-side; send it only as a
+      // no-op fallback for older Console deployments.
+      ...(params.repoId !== undefined ? { repoId: params.repoId } : {}),
+      ...(params.projectId ? { projectId: params.projectId } : {}),
       branch: params.branch,
       scanLevel: params.scanLevel,
       commitSha: params.commitSha,
@@ -309,13 +309,12 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const wait = params.wait ?? true;
   const commitSha = params.commitSha ?? getCommitShaEnvVar();
 
-  if (!projectId && !repoId) {
-    throw new Error(
-      "No project identifier found. Either set PENSAR_PROJECT_ID, pass --project, or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected)."
-    );
-  }
-
-  const identifier = projectId ? `project ${projectId}` : `repo ${repoId}`;
+  const identifier =
+    repoId !== undefined
+      ? `repo ${repoId}`
+      : projectId
+        ? `project ${projectId}`
+        : "workspace";
   console.log(`Dispatching pentest for ${identifier}...`);
 
   const { scanId, label } = await dispatchScan({

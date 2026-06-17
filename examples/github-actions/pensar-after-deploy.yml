@@ -33,8 +33,9 @@ jobs:
 
       - name: Run Pensar Security Pentest
         env:
+          # The API key determines the workspace; the repo is auto-detected
+          # from GITHUB_REPOSITORY_ID.
           PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
-          PENSAR_PROJECT_ID: ${{ secrets.PENSAR_PROJECT_ID }}
         run: |
           echo "Running security pentest after deployment..."
           echo "Triggered by: ${{ github.event.workflow_run.name }}"

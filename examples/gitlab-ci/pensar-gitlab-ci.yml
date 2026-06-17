@@ -1,5 +1,9 @@
 # Pensar Security Pentest for GitLab CI
 # Add this to your .gitlab-ci.yml or include it as a template
+#
+# The PENSAR_API_KEY determines the workspace. GitLab does not expose a GitHub
+# repository id, so these run workspace-wide; pass `--repo-id <id>` to scope to
+# a single repository.
 
 stages:
   - test
@@ -17,7 +21,6 @@ pensar-pentest-mr:
     - pensar pentest --branch $CI_COMMIT_REF_NAME
   variables:
     PENSAR_API_KEY: $PENSAR_API_KEY
-    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID
 
 # Run on commits to main branches
 pensar-pentest-push:
@@ -31,7 +34,6 @@ pensar-pentest-push:
     - pensar pentest --branch $CI_COMMIT_REF_NAME
   variables:
     PENSAR_API_KEY: $PENSAR_API_KEY
-    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID
 
 # Run after deployment (triggered by upstream pipeline)
 pensar-pentest-post-deploy:
@@ -46,4 +48,3 @@ pensar-pentest-post-deploy:
     - pensar pentest --branch $CI_COMMIT_REF_NAME
   variables:
     PENSAR_API_KEY: $PENSAR_API_KEY
-    PENSAR_PROJECT_ID: $PENSAR_PROJECT_ID
