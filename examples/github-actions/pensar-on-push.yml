@@ -26,7 +26,6 @@ jobs:
 
       - name: Run Pensar Security Pentest
         env:
-          # The API key determines the workspace; the repo is auto-detected
-          # from GITHUB_REPOSITORY_ID.
+          # API key picks the workspace; repo auto-detected from GITHUB_REPOSITORY_ID.
           PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
         run: pensar pentest --branch ${{ github.ref_name }}

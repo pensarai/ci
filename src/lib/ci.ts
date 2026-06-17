@@ -146,9 +146,8 @@ export interface DispatchScanParams {
 export async function dispatchScan(
   params: DispatchScanParams
 ): Promise<{ scanId: string; label: string }> {
-  // No repo identifier is required: the API key resolves to a workspace and
-  // the scan falls back to workspace-wide. A repoId (GITHUB_REPOSITORY_ID)
-  // narrows it to one repository's apps.
+  // No repo id required: the API key resolves to a workspace (workspace-wide
+  // scan); a repoId narrows it to one repo.
   const apiUrl = getApiUrl(params.environment ?? null);
 
   const resp = await fetch(`${apiUrl}/ci/dispatch`, {
@@ -158,10 +157,8 @@ export async function dispatchScan(
       "x-api-key": params.apiKey,
     },
     body: JSON.stringify({
-      // Console V2 scopes by workspace (from the API key) + optional repo.
-      // Always send repoId when present so repo-scoping isn't shadowed.
-      // projectId is accepted-but-ignored server-side; send it only as a
-      // no-op fallback for older Console deployments.
+      // V2 scopes by workspace (API key) + optional repoId. projectId is
+      // ignored server-side; never let it shadow repoId.
       ...(params.repoId !== undefined ? { repoId: params.repoId } : {}),
       ...(params.projectId ? { projectId: params.projectId } : {}),
       branch: params.branch,

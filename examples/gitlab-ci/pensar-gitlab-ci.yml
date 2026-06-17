@@ -1,9 +1,8 @@
 # Pensar Security Pentest for GitLab CI
 # Add this to your .gitlab-ci.yml or include it as a template
 #
-# The PENSAR_API_KEY determines the workspace. GitLab does not expose a GitHub
-# repository id, so these run workspace-wide; pass `--repo-id <id>` to scope to
-# a single repository.
+# PENSAR_API_KEY picks the workspace. GitLab exposes no GitHub repo id, so these
+# run workspace-wide; pass `--repo-id <id>` to scope to one repository.
 
 stages:
   - test
