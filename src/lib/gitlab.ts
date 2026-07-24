@@ -23,6 +23,9 @@ function getGitLabEnvVars() {
   const scanLevel =
     (process.env.PENSAR_SCAN_LEVEL as "priority" | "full") ?? "full";
 
+  // How to scope the pentest against the diff (defaults to custom in runScan).
+  const testType = CI.getTestTypeEnvVar();
+
   return {
     apiKey,
     projectId,
@@ -31,6 +34,7 @@ function getGitLabEnvVars() {
     wait,
     scanLevel,
     commitSha,
+    testType,
   };
 }
 
@@ -39,8 +43,16 @@ function getGitLabEnvVars() {
  */
 export async function runScan(): Promise<void> {
   try {
-    const { apiKey, projectId, branch, environment, wait, scanLevel, commitSha } =
-      getGitLabEnvVars();
+    const {
+      apiKey,
+      projectId,
+      branch,
+      environment,
+      wait,
+      scanLevel,
+      commitSha,
+      testType,
+    } = getGitLabEnvVars();
 
     console.log("Starting Pensar security pentest from GitLab CI...");
 
@@ -52,6 +64,7 @@ export async function runScan(): Promise<void> {
       environment,
       wait,
       commitSha,
+      testType,
     });
 
     if (result.status === "completed") {
