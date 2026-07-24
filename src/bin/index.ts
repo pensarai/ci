@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { program } from "commander";
-import { CI, type Environment, type SeverityLevel } from "../lib/ci";
+import { CI, type Environment, type SeverityLevel, type TestType } from "../lib/ci";
 
 program
   .name("pensar")
   .description("Pensar CI - Security scanning for your CI/CD pipeline")
-  .version("1.2.0");
+  .version("2.5.0");
 
 program
   .command("pentest")
@@ -18,6 +18,11 @@ program
   )
   .option("-b, --branch <branch>", "Branch to pentest")
   .option("-l, --level <level>", "Pentest level: priority or full", "full")
+  .option(
+    "-t, --test-type <type>",
+    "How to scope the pentest against the diff: 'custom' (AI derives objectives from the diff and runs an app-scoped custom test) or 'endpoint-selection' (AI picks the affected endpoints). Or set PENSAR_TEST_TYPE.",
+    undefined
+  )
   .option("--quick", "Run a quick pentest (highest-risk endpoints only, ~15 mins). Shorthand for --level priority")
   .option("--no-wait", "Don't wait for pentest to complete")
   .option("-u, --url <url>", "Deploy preview URL to pentest against")
@@ -59,6 +64,17 @@ program
         ? "priority"
         : (options.level as "priority" | "full");
 
+      let testType: TestType | undefined;
+      if (options.testType) {
+        testType = options.testType.toLowerCase() as TestType;
+        if (!CI.TEST_TYPES.includes(testType)) {
+          console.error(
+            `Invalid test type "${options.testType}". Valid values: ${CI.TEST_TYPES.join(", ")}`
+          );
+          process.exit(1);
+        }
+      }
+
       const result = await CI.runScan({
         projectId: options.project,
         repoId: options.repoId ? parseInt(options.repoId, 10) : undefined,
@@ -69,6 +85,7 @@ program
         errorSeverityThreshold: severityThreshold,
         commitSha: options.commit,
         targetUrl: options.url,
+        testType,
       });
 
       if (result.status === "completed") {

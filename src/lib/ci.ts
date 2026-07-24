@@ -9,6 +9,15 @@ export type Environment = "dev" | "staging" | "production" | null;
 export const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export type SeverityLevel = (typeof SEVERITY_LEVELS)[number];
 
+// How a CI pentest is scoped against the code changes.
+// - `custom` (default): the agent reads the git diff, derives pentest
+//   objectives from what changed, and runs an application-scoped custom test.
+// - `endpoint-selection`: the agent picks the endpoints affected by the diff
+//   and runs a per-endpoint test against them.
+export const TEST_TYPES = ['custom', 'endpoint-selection'] as const;
+export type TestType = (typeof TEST_TYPES)[number];
+export const DEFAULT_TEST_TYPE: TestType = 'custom';
+
 // Environment helpers
 export function getApiKeyEnvVar(): string {
   if (!process.env.PENSAR_API_KEY)
@@ -41,6 +50,21 @@ export function getCommitShaEnvVar(): string | undefined {
     process.env.PENSAR_COMMIT_SHA ??
     undefined
   );
+}
+
+export function getTestTypeEnvVar(): TestType | undefined {
+  const value = process.env.PENSAR_TEST_TYPE;
+  if (!value) return undefined;
+
+  const normalized = value.toLowerCase() as TestType;
+  if (!TEST_TYPES.includes(normalized)) {
+    console.warn(
+      `Invalid test type "${value}". Valid values: ${TEST_TYPES.join(', ')}. Falling back to "${DEFAULT_TEST_TYPE}".`
+    );
+    return undefined;
+  }
+
+  return normalized;
 }
 
 export function getErrorSeverityThresholdEnvVar(): SeverityLevel {
@@ -141,6 +165,7 @@ export interface DispatchScanParams {
   environment?: Environment;
   commitSha?: string;
   targetUrl?: string;
+  testType?: TestType;
 }
 
 export async function dispatchScan(
@@ -167,6 +192,7 @@ export async function dispatchScan(
       branch: params.branch,
       scanLevel: params.scanLevel,
       commitSha: params.commitSha,
+      ...(params.testType && { testType: params.testType }),
       ...(params.targetUrl && { targetUrl: params.targetUrl }),
     }),
   });
@@ -299,6 +325,7 @@ export interface RunScanParams {
   errorSeverityThreshold?: SeverityLevel;
   commitSha?: string;
   targetUrl?: string;
+  testType?: TestType;
 }
 
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
@@ -308,6 +335,8 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const environment = params.environment ?? getEnvironmentEnvVar();
   const wait = params.wait ?? true;
   const commitSha = params.commitSha ?? getCommitShaEnvVar();
+  const testType =
+    params.testType ?? getTestTypeEnvVar() ?? DEFAULT_TEST_TYPE;
 
   if (!projectId && !repoId) {
     throw new Error(
@@ -327,6 +356,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     environment,
     commitSha,
     targetUrl: params.targetUrl,
+    testType,
   });
 
   console.log(`Pentest ${label} dispatched (ID: ${scanId})`);
