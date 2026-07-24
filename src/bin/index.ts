@@ -6,7 +6,7 @@ import { CI, type Environment, type SeverityLevel, type TestType } from "../lib/
 program
   .name("pensar")
   .description("Pensar CI - Security scanning for your CI/CD pipeline")
-  .version("2.5.0");
+  .version("2.6.0");
 
 program
   .command("pentest")
