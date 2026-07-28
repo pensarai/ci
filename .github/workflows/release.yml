@@ -17,15 +17,17 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    environment: release
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        # zizmor: ignore[artipacked] — no artifact uploads in this workflow
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
@@ -65,8 +67,10 @@ jobs:
 
       - name: Create and push git tag
         if: steps.check.outputs.should_publish == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.check.outputs.version }}
         run: |
-          TAG="v${{ steps.check.outputs.version }}"
+          TAG="v${RELEASE_VERSION}"
 
           # Check if the tag already exists on the remote
           if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
@@ -80,12 +84,15 @@ jobs:
 
       - name: Generate release notes
         if: steps.check.outputs.should_publish == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.check.outputs.version }}
+          RELEASE_PACKAGE: ${{ steps.check.outputs.package }}
         run: |
           # Get the previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$PREV_TAG" ]; then
-            echo "Generating changelog from $PREV_TAG to v${{ steps.check.outputs.version }}"
+            echo "Generating changelog from $PREV_TAG to v${RELEASE_VERSION}"
             COMMITS=$(git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD --no-merges)
           else
             echo "No previous tag found, listing recent commits"
@@ -99,18 +106,20 @@ jobs:
           echo "## Installation" >> release_notes.md
           echo "" >> release_notes.md
           echo '```bash' >> release_notes.md
-          echo "npm install ${{ steps.check.outputs.package }}@${{ steps.check.outputs.version }}" >> release_notes.md
+          echo "npm install ${RELEASE_PACKAGE}@${RELEASE_VERSION}" >> release_notes.md
           echo '```' >> release_notes.md
 
       - name: Create GitHub Release
         if: steps.check.outputs.should_publish == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.check.outputs.version }}
-          name: v${{ steps.check.outputs.version }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(steps.check.outputs.version, '-') }}
-          generate_release_notes: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.check.outputs.version }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "${RELEASE_VERSION}" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "v${RELEASE_VERSION}" \
+            --title "v${RELEASE_VERSION}" \
+            --notes-file release_notes.md \
+            $PRERELEASE_FLAG

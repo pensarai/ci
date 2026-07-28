@@ -9,10 +9,15 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions: {}
+
 jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     strategy:
       matrix:
@@ -20,10 +25,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -35,5 +42,3 @@ jobs:
 
       - name: Verify CLI is executable
         run: node dist/bin/index.js --help
-
-
