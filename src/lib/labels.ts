@@ -5,6 +5,7 @@ export class LabelLookupError extends Error {}
 
 type GithubEventPayload = {
   pull_request?: { labels?: Array<{ name?: string }> };
+  workflow_run?: { head_sha?: string };
 };
 
 type GithubPullSummary = { labels?: Array<{ name?: string }> };
@@ -70,9 +71,14 @@ export async function resolveLabels(commitSha?: string): Promise<string[]> {
   const gitlabLabels = process.env.CI_MERGE_REQUEST_LABELS;
   if (gitlabLabels !== undefined) return cleanLabels(gitlabLabels.split(","));
 
-  if (!commitSha) return [];
+  // On workflow_run, GITHUB_SHA is the tip of the default branch rather than
+  // the commit the triggering run tested, so the caller's SHA would gate on
+  // whatever landed most recently. The head SHA is only in the payload, which
+  // is why these workflows already read head_branch from there too.
+  const sha = event?.workflow_run?.head_sha ?? commitSha;
+  if (!sha) return [];
 
-  const pulls = await lookUpPullsForCommit(commitSha);
+  const pulls = await lookUpPullsForCommit(sha);
   return cleanLabels(
     pulls.flatMap((pull) => (pull.labels ?? []).map((l) => l.name))
   );

@@ -56,6 +56,20 @@ async function main() {
   reset();
   assert.deepEqual(await resolveLabels(), []);
 
+  // On workflow_run, GITHUB_SHA is the default branch tip rather than the
+  // commit that was deployed, so the head SHA has to come from the payload.
+  // Attempting the lookup at all is the signal: without the payload SHA there
+  // is nothing to look up and the call would quietly return no labels.
+  reset();
+  const runEventPath = path.join(os.tmpdir(), `pensar-run-${Date.now()}.json`);
+  fs.writeFileSync(
+    runEventPath,
+    JSON.stringify({ workflow_run: { head_sha: "deadbeef" } })
+  );
+  process.env.GITHUB_EVENT_PATH = runEventPath;
+  await assert.rejects(() => resolveLabels(), /GITHUB_TOKEN/);
+  fs.unlinkSync(runEventPath);
+
   // A commit to look up but no credentials to look it up with must fail loudly.
   reset();
   await assert.rejects(() => resolveLabels("abc123"), /GITHUB_TOKEN/);

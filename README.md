@@ -79,7 +79,7 @@ The labels are read from wherever the current event has them:
 | --- | --- |
 | `pull_request` | The event payload the runner already wrote to disk. No API call. |
 | `push` (a merge landing on your release branch) | The pull requests that contain `GITHUB_SHA`, via the GitHub API. |
-| `workflow_run` (after a deploy) | The same lookup, against the triggering run's head SHA. |
+| `workflow_run` (after a deploy) | The same lookup, against `workflow_run.head_sha` from the payload. `GITHUB_SHA` is the default branch tip on this event, not the deployed commit. |
 | GitLab merge requests | `CI_MERGE_REQUEST_LABELS`. No API call. |
 
 The lookup on `push` and `workflow_run` needs a token that can read pull
