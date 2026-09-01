@@ -67,6 +67,11 @@ export async function runScan(): Promise<void> {
       testType,
     });
 
+    // The label gate declined to run. Nothing was dispatched, and that is a pass.
+    if (result === null) {
+      return;
+    }
+
     if (result.status === "completed") {
       if (result.issuesCount > 0) {
         console.error(

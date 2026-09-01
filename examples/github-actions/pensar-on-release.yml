@@ -1,0 +1,42 @@
+# Pensar Security Pentest on Release Cut
+# Runs one pentest when a labelled change lands on the release branch.
+#
+# Developers label the pull requests they want covered; everything else merges
+# without triggering a pentest.
+
+name: Pensar Security Pentest (Release)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  # Required: the label lives on the pull request, not on the commit, so the
+  # PR behind this commit has to be looked up.
+  pull-requests: read
+
+jobs:
+  security-pentest:
+    name: Security Pentest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Pensar CI
+        run: npm install -g @pensar/ci
+
+      - name: Run Pensar Security Pentest
+        env:
+          PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
+          PENSAR_PROJECT_ID: ${{ secrets.PENSAR_PROJECT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Exits 0 without dispatching when the merged PR was not labelled.
+        run: pensar pentest --require-label pentest

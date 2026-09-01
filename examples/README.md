@@ -36,6 +36,15 @@ Runs a security pentest whenever code is pushed to main branches. Useful for con
 
 Runs a security pentest after another workflow completes (e.g., after deployment). Uses GitHub's `workflow_run` trigger.
 
+### Pentest on Release Cut (labelled changes only)
+
+[`github-actions/pensar-on-release.yml`](./github-actions/pensar-on-release.yml)
+
+Runs a pentest when a change lands on the release branch, but only if the pull
+request behind it carried the `pentest` label. Developers opt individual changes
+in; everything else merges untouched. Needs `pull-requests: read` and
+`GITHUB_TOKEN` so the label can be read off the pull request.
+
 ## GitLab CI
 
 ### GitLab CI Configuration
@@ -58,6 +67,8 @@ Options:
   -b, --branch <branch>      Branch to pentest
   -l, --level <level>        Pentest level: priority or full (default: full)
   -e, --environment <env>    Target environment: dev, staging, or production
+  --require-label <labels>   Only run when the change carries one of these
+                             labels (comma-separated)
   --no-wait                  Don't wait for pentest to complete
 ```
 

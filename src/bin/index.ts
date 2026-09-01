@@ -24,6 +24,10 @@ program
     undefined
   )
   .option("--quick", "Run a quick pentest (highest-risk endpoints only, ~15 mins). Shorthand for --level priority")
+  .option(
+    "--require-label <labels>",
+    "Only run when the pull request behind this commit carries one of these labels (comma-separated). Or set PENSAR_REQUIRE_LABEL."
+  )
   .option("--no-wait", "Don't wait for pentest to complete")
   .option("-u, --url <url>", "Deploy preview URL to pentest against")
   .option("-e, --environment <env>", "Environment: dev, staging, or production")
@@ -86,7 +90,13 @@ program
         commitSha: options.commit,
         targetUrl: options.url,
         testType,
+        requireLabel: options.requireLabel,
       });
+
+      // The gate declined to run. Nothing was dispatched, and that is a pass.
+      if (result === null) {
+        return;
+      }
 
       if (result.status === "completed") {
         // Check for issues at or above the severity threshold

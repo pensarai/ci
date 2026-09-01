@@ -46,6 +46,7 @@ the last scan:
 | `-l, --level`       | Pentest level: `priority` or `full` (default: `full`)                       |
 | `-t, --test-type`   | Test scoping: `custom` (default) or `endpoint-selection` (or set `PENSAR_TEST_TYPE`) |
 | `--quick`           | Shorthand for `--level priority`. Tests highest-risk endpoints only (~15 mins) |
+| `--require-label`   | Only run when the pull request behind this commit carries one of these labels (comma-separated). Or set `PENSAR_REQUIRE_LABEL` |
 | `-e, --environment` | Target environment: `dev`, `staging`, or `production`                       |
 | `-c, --commit`      | Commit SHA (auto-detected from CI env vars, or set `PENSAR_COMMIT_SHA`)     |
 | `-s, --severity`    | Minimum severity threshold to error on (or set `PENSAR_ERROR_SEVERITY_THRESHOLD`) |
@@ -60,7 +61,52 @@ the last scan:
 | `PENSAR_ENVIRONMENT`             | Target environment (`dev`, `staging`, or `production`) |
 | `PENSAR_COMMIT_SHA`              | Commit SHA override (auto-detected from `GITHUB_SHA`, `CI_COMMIT_SHA`, `BITBUCKET_COMMIT`) |
 | `PENSAR_TEST_TYPE`              | Test scoping: `custom` (default) or `endpoint-selection`                |
+| `PENSAR_REQUIRE_LABEL`           | Only run when the change carries one of these labels (comma-separated) |
 | `PENSAR_ERROR_SEVERITY_THRESHOLD`| Minimum severity to trigger a non-zero exit (`critical`, `high`, `medium`, `low`, `info`) |
+
+### Running only on labelled changes
+
+Teams that pentest a subset of changes can label the pull request and gate the
+run on that label:
+
+```bash
+pensar pentest --require-label pentest
+```
+
+The labels are read from wherever the current event has them:
+
+| Trigger | Where the labels come from |
+| --- | --- |
+| `pull_request` | The event payload the runner already wrote to disk. No API call. |
+| `push` (a merge landing on your release branch) | The pull requests that contain `GITHUB_SHA`, via the GitHub API. |
+| `workflow_run` (after a deploy) | The same lookup, against the triggering run's head SHA. |
+| GitLab merge requests | `CI_MERGE_REQUEST_LABELS`. No API call. |
+
+The lookup on `push` and `workflow_run` needs a token that can read pull
+requests:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: read
+# ...
+      - run: pensar pentest --require-label pentest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PENSAR_API_KEY: ${{ secrets.PENSAR_API_KEY }}
+```
+
+When the label is missing, nothing is dispatched, the command exits `0`, and it
+logs which labels it did find. A missing label is not a failure — a required
+check that goes red because nothing needed testing gets switched off.
+
+If a gate is configured and the labels cannot be determined at all (no token, or
+the API call fails), the command fails instead of guessing. Dispatching anyway
+would ignore the gate; skipping silently would turn pentesting off without
+anyone noticing.
+
+Labels are only used to decide whether to run. Nothing about them is sent to
+Pensar.
 
 ## CI/CD Integration
 

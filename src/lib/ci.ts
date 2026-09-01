@@ -1,5 +1,10 @@
 import { z } from "zod";
 import dotenv from "dotenv";
+import {
+  hasRequiredLabel,
+  parseRequiredLabels,
+  resolveLabels,
+} from "./labels";
 dotenv.config();
 
 // Environment type for targeting different Pensar API instances
@@ -50,6 +55,10 @@ export function getCommitShaEnvVar(): string | undefined {
     process.env.PENSAR_COMMIT_SHA ??
     undefined
   );
+}
+
+export function getRequireLabelEnvVar(): string | undefined {
+  return process.env.PENSAR_REQUIRE_LABEL || undefined;
 }
 
 export function getTestTypeEnvVar(): TestType | undefined {
@@ -326,9 +335,21 @@ export interface RunScanParams {
   commitSha?: string;
   targetUrl?: string;
   testType?: TestType;
+  /**
+   * Only dispatch when the change carries one of these labels. Comma-separated
+   * on the CLI; any one of them is enough.
+   */
+  requireLabel?: string;
 }
 
-export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
+/**
+ * Dispatch a pentest, unless `requireLabel` is set and the triggering change
+ * does not carry it — in which case nothing is dispatched and `null` is
+ * returned. A skip is a normal outcome, not a failure.
+ */
+export async function runScan(
+  params: RunScanParams = {}
+): Promise<ScanStatus | null> {
   const apiKey = params.apiKey ?? getApiKeyEnvVar();
   const projectId = params.projectId ?? getProjectIdEnvVar();
   const repoId = params.repoId ?? getRepoIdEnvVar();
@@ -342,6 +363,24 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     throw new Error(
       "No project identifier found. Either set PENSAR_PROJECT_ID, pass --project, or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID is auto-detected)."
     );
+  }
+
+  const requireLabel = params.requireLabel ?? getRequireLabelEnvVar();
+  const required = requireLabel ? parseRequiredLabels(requireLabel) : [];
+
+  // With a gate configured, not knowing the labels is a hard error: dispatching
+  // anyway ignores the gate, and skipping silently turns pentests off.
+  if (required.length > 0) {
+    const labels = await resolveLabels(commitSha);
+    if (!hasRequiredLabel(labels, required)) {
+      console.log(
+        `Skipping pentest: this change carries none of the required label(s) [${required.join(", ")}].` +
+          (labels.length
+            ? ` Labels found: ${labels.join(", ")}.`
+            : " No labels found on the change.")
+      );
+      return null;
+    }
   }
 
   const identifier = projectId ? `project ${projectId}` : `repo ${repoId}`;
