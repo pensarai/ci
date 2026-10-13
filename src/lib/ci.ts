@@ -164,6 +164,7 @@ export interface DispatchScanParams {
   scanLevel?: "priority" | "full";
   environment?: Environment;
   commitSha?: string;
+  baseSha?: string;
   targetUrl?: string;
   testType?: TestType;
 }
@@ -175,6 +176,16 @@ export async function dispatchScan(
     throw new Error(
       "Either projectId or repoId must be provided. Set PENSAR_PROJECT_ID or run in a GitHub Actions environment (GITHUB_REPOSITORY_ID)."
     );
+  }
+
+  if (params.baseSha !== undefined) {
+    const fullCommitSha = /^[0-9a-f]{40}$/i;
+    if (!fullCommitSha.test(params.baseSha)) {
+      throw new Error("baseSha (--base or PENSAR_BASE_SHA) must be a full 40-character commit SHA");
+    }
+    if (!params.commitSha || !fullCommitSha.test(params.commitSha)) {
+      throw new Error("A full commitSha (--commit or a commit environment variable) is required with baseSha");
+    }
   }
 
   const apiUrl = getApiUrl(params.environment ?? null);
@@ -192,6 +203,10 @@ export async function dispatchScan(
       branch: params.branch,
       scanLevel: params.scanLevel,
       commitSha: params.commitSha,
+      ...(params.baseSha !== undefined && {
+        baseSha: params.baseSha,
+        ...(params.repoId !== undefined && { repoId: params.repoId }),
+      }),
       ...(params.testType && { testType: params.testType }),
       ...(params.targetUrl && { targetUrl: params.targetUrl }),
     }),
@@ -324,6 +339,7 @@ export interface RunScanParams {
   pollIntervalMs?: number;
   errorSeverityThreshold?: SeverityLevel;
   commitSha?: string;
+  baseSha?: string;
   targetUrl?: string;
   testType?: TestType;
 }
@@ -335,6 +351,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const environment = params.environment ?? getEnvironmentEnvVar();
   const wait = params.wait ?? true;
   const commitSha = params.commitSha ?? getCommitShaEnvVar();
+  const baseSha = params.baseSha ?? process.env.PENSAR_BASE_SHA;
   const testType =
     params.testType ?? getTestTypeEnvVar() ?? DEFAULT_TEST_TYPE;
 
@@ -355,6 +372,7 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     scanLevel: params.scanLevel,
     environment,
     commitSha,
+    baseSha,
     targetUrl: params.targetUrl,
     testType,
   });
