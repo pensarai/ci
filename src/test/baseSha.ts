@@ -66,6 +66,44 @@ async function check() {
       assert.ok(!result.stdout.includes("DISPATCH:"), "invalid ranges must not reach the network");
     }
 
+    const prUrl = "https://github.com/acme/app/pull/12";
+    assert.equal(request(["--pull-request", "12"]).pullRequest, 12);
+    assert.equal(request(["--pull-request", prUrl]).pullRequest, prUrl);
+    assert.equal(request([], { PENSAR_PULL_REQUEST: prUrl }).pullRequest, prUrl);
+    assert.equal(
+      request(["--pull-request", "7"], { PENSAR_PULL_REQUEST: prUrl }).pullRequest,
+      7
+    );
+    assert.ok(!("pullRequest" in request([])));
+    // A numeric PR resolves server-side against the repository, so it travels with repoId.
+    assert.equal(request(["--project", "workspace", "--pull-request", "12"]).repoId, 123);
+    for (const bad of ["0", "pr-12", "ftp://github.com/acme/app/pull/12"]) {
+      const result = cli(["--pull-request", bad]);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /pull request URL or number/);
+      assert.ok(!result.stdout.includes("DISPATCH:"), "an invalid pull request must not reach the network");
+    }
+
+    // The pull request's GitHub check concludes with the CLI's threshold.
+    assert.equal(request(["--pull-request", "12"]).errorSeverityThreshold, "critical");
+    assert.equal(
+      request(["--pull-request", "12", "--severity", "high"]).errorSeverityThreshold,
+      "high"
+    );
+    assert.equal(
+      request(["--pull-request", "12"], { PENSAR_ERROR_SEVERITY_THRESHOLD: "medium" })
+        .errorSeverityThreshold,
+      "medium"
+    );
+    assert.equal(
+      request(["--pull-request", "12", "--severity", "LOW"], {
+        PENSAR_ERROR_SEVERITY_THRESHOLD: "medium",
+      }).errorSeverityThreshold,
+      "low"
+    );
+    // Without a pull request the body stays what older Consoles accept.
+    assert.ok(!("errorSeverityThreshold" in request(["--severity", "high"])));
+
     await assert.rejects(dispatchScan({ apiKey: "test", repoId: 123, baseSha: base }), /commitSha.*required/);
     await assert.rejects(dispatchScan({ apiKey: "test", repoId: 123, baseSha: "bad", commitSha: head }), /baseSha.*full 40-character commit SHA/);
     console.log("Explicit commit range checks passed");

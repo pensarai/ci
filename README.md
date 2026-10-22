@@ -49,6 +49,7 @@ the last scan:
 | `-e, --environment` | Target environment: `dev`, `staging`, or `production`                       |
 | `-c, --commit`      | Commit SHA (auto-detected from CI env vars, or set `PENSAR_COMMIT_SHA`)     |
 | `--base`            | Previous deploy commit SHA; tests only the changes from it to `--commit` (or set `PENSAR_BASE_SHA`) |
+| `--pull-request`    | GitHub pull request URL or number; findings are reported on that pull request, and its GitHub check uses `--severity` (or set `PENSAR_PULL_REQUEST`) |
 | `-s, --severity`    | Minimum severity threshold to error on (or set `PENSAR_ERROR_SEVERITY_THRESHOLD`) |
 | `--no-wait`         | Don't wait for pentest to complete                                          |
 
@@ -62,6 +63,7 @@ the last scan:
 | `PENSAR_COMMIT_SHA`              | Commit SHA override (auto-detected from `GITHUB_SHA`, `CI_COMMIT_SHA`, `BITBUCKET_COMMIT`) |
 | `PENSAR_TEST_TYPE`              | Test scoping: `custom` (default) or `endpoint-selection`                |
 | `PENSAR_BASE_SHA`               | Previous deploy commit SHA to compare `--commit` against (full 40-character SHA) |
+| `PENSAR_PULL_REQUEST`           | GitHub pull request URL or number to report findings on |
 | `PENSAR_ERROR_SEVERITY_THRESHOLD`| Minimum severity to trigger a non-zero exit (`critical`, `high`, `medium`, `low`, `info`) |
 
 ## CI/CD Integration

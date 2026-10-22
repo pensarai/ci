@@ -33,6 +33,10 @@ program
   )
   .option("--base <sha>", "Previous deployment commit SHA (or set PENSAR_BASE_SHA)")
   .option(
+    "--pull-request <url-or-number>",
+    "GitHub pull request URL or number to report findings on (or set PENSAR_PULL_REQUEST)"
+  )
+  .option(
     "-s, --severity <severity>",
     "Minimum severity threshold to trigger error (critical, high, medium, low, info). Or set PENSAR_ERROR_SEVERITY_THRESHOLD env var.",
     undefined
@@ -88,6 +92,7 @@ program
         baseSha: options.base,
         targetUrl: options.url,
         testType,
+        pullRequest: options.pullRequest,
       });
 
       if (result.status === "completed") {
