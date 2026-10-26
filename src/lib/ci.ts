@@ -67,6 +67,26 @@ export function getTestTypeEnvVar(): TestType | undefined {
   return normalized;
 }
 
+// URL.canParse needs Node 18.17; engines allows any Node 18.
+function isUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A pull request is a positive PR number or an http(s) pull request URL.
+export function parsePullRequest(value: string): string | number {
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed) && Number(trimmed) > 0) return Number(trimmed);
+  if (/^https?:\/\//i.test(trimmed) && isUrl(trimmed)) return trimmed;
+  throw new Error(
+    `pullRequest (--pull-request or PENSAR_PULL_REQUEST) must be a pull request URL or number, got "${value}"`
+  );
+}
+
 export function getErrorSeverityThresholdEnvVar(): SeverityLevel {
   const value = process.env.PENSAR_ERROR_SEVERITY_THRESHOLD;
   if (!value) return 'critical'; // Default to critical
@@ -167,6 +187,8 @@ export interface DispatchScanParams {
   baseSha?: string;
   targetUrl?: string;
   testType?: TestType;
+  pullRequest?: string | number;
+  errorSeverityThreshold?: SeverityLevel;
 }
 
 export async function dispatchScan(
@@ -209,6 +231,16 @@ export async function dispatchScan(
       }),
       ...(params.testType && { testType: params.testType }),
       ...(params.targetUrl && { targetUrl: params.targetUrl }),
+      // The threshold lets the pull request's GitHub check reach the same
+      // verdict as this CLI's exit code. It travels only with a pull request:
+      // Consoles without pull-request reviews reject unknown dispatch fields.
+      ...(params.pullRequest !== undefined && {
+        pullRequest: params.pullRequest,
+        ...(params.repoId !== undefined && { repoId: params.repoId }),
+        ...(params.errorSeverityThreshold && {
+          errorSeverityThreshold: params.errorSeverityThreshold,
+        }),
+      }),
     }),
   });
 
@@ -342,6 +374,7 @@ export interface RunScanParams {
   baseSha?: string;
   targetUrl?: string;
   testType?: TestType;
+  pullRequest?: string;
 }
 
 export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
@@ -354,6 +387,9 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
   const baseSha = params.baseSha ?? process.env.PENSAR_BASE_SHA;
   const testType =
     params.testType ?? getTestTypeEnvVar() ?? DEFAULT_TEST_TYPE;
+  const rawPullRequest = params.pullRequest ?? process.env.PENSAR_PULL_REQUEST;
+  const pullRequest =
+    rawPullRequest !== undefined ? parsePullRequest(rawPullRequest) : undefined;
 
   if (!projectId && !repoId) {
     throw new Error(
@@ -375,6 +411,9 @@ export async function runScan(params: RunScanParams = {}): Promise<ScanStatus> {
     baseSha,
     targetUrl: params.targetUrl,
     testType,
+    pullRequest,
+    errorSeverityThreshold:
+      params.errorSeverityThreshold ?? getErrorSeverityThresholdEnvVar(),
   });
 
   console.log(`Pentest ${label} dispatched (ID: ${scanId})`);
