@@ -36,6 +36,12 @@ jobs:
       - name: Check explicit commit ranges
         run: npm run check
 
+      - name: Dependency pins
+        run: node scripts/check-dependency-pins.mjs
+
+      - name: Dependency pin check tests
+        run: node --test scripts/check-dependency-pins.test.mjs
+
       - name: Verify CLI is executable
         run: node dist/bin/index.js --help
 

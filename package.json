@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "check": "node dist/test/baseSha.js",
-    "start": "ts-node src/bin/index.ts"
+    "start": "ts-node src/bin/index.ts",
+    "check:dependency-pins": "node scripts/check-dependency-pins.mjs"
   },
   "keywords": [
     "security",
@@ -23,14 +24,14 @@
   "author": "Pensar",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^22.13.4",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.3"
+    "@types/node": "22.13.4",
+    "ts-node": "10.9.2",
+    "typescript": "5.7.3"
   },
   "dependencies": {
-    "commander": "^13.1.0",
-    "dotenv": "^16.4.7",
-    "zod": "^3.24.2"
+    "commander": "13.1.0",
+    "dotenv": "16.4.7",
+    "zod": "3.24.2"
   },
   "files": [
     "dist",

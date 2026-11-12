@@ -14,3 +14,14 @@ A tag such as `@v4` can be repointed by whoever controls the action's repository
 - **Reach for `gh` or a few lines of shell before adding a third-party action.** Every action is code that runs with the job's token.
 - **Check locally** with `zizmor --pedantic .` (`brew install zizmor`). Set `GH_TOKEN` to include the checks that need the GitHub API.
 - **Never disable an audit or add an ignore in `.github/zizmor.yml` to get a check green.** The audits disabled there have existing findings that are being worked off. Fix the finding, or ask.
+
+## Dependencies — exact versions
+
+`package-lock.json` pins what CI installs. `package.json` pins what we ask for: every version is exact, so a version only changes when a diff says so. A range such as `^1.2.3` lets `npm install <pkg>`, `npm update` or a regenerated lockfile pull a release nobody chose, and a compromised release arrives the same way. `node scripts/check-dependency-pins.mjs` enforces this in CI.
+
+- **Versions are exact**: `"left-pad": "1.3.0"`, never `^`, `~`, `*`, `latest` or a tag. This covers `dependencies`, `devDependencies`, `optionalDependencies` and `overrides`. `npm install <pkg>` writes an exact version because `.npmrc` sets `save-exact=true`; do not remove that setting. If this repository gains npm workspaces, one workspace package depends on another by exact version too; npm has no `workspace:` protocol.
+- **`peerDependencies` stay ranges.** They describe what a consumer may bring, not what we install.
+- **This package is published.** Everyone who installs it gets its `dependencies` at exactly these versions, so keep them few, and ship a release when one of them needs a security fix.
+- **To change a version**, edit it (or `npm install <pkg>@<version>`), run `npm install`, and read the `package-lock.json` diff: it should show that package and what it pulled in, nothing else.
+- **Before adding a dependency**, check that a few lines of our own code would not do, that the package is maintained and widely used, and whether it runs an install script.
+- **Run tools from the lockfile**: after `npm ci`, `npx <tool>` runs the installed, pinned version of a package we depend on. If the package is not installed, `npx` downloads whatever version is current, so install first or name the version (`npx <tool>@<version>`). Do not `npx` a package that is not in `package-lock.json`.
