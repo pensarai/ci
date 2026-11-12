@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "check": "node dist/test/baseSha.js",
-    "start": "ts-node src/bin/index.ts"
+    "start": "ts-node src/bin/index.ts",
+    "check:dependency-pins": "node scripts/check-dependency-pins.mjs"
   },
   "keywords": [
     "security",
