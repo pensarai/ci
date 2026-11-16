@@ -11,7 +11,8 @@
     "build": "tsc",
     "check": "node dist/test/baseSha.js",
     "start": "ts-node src/bin/index.ts",
-    "check:dependency-pins": "node scripts/check-dependency-pins.mjs"
+    "check:dependency-pins": "node scripts/check-dependency-pins.mjs",
+    "check:osv-gate": "node scripts/osv-gate.mjs --lockfile package-lock.json"
   },
   "keywords": [
     "security",
