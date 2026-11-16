@@ -9,11 +9,11 @@ on:
     branches: [main]
   workflow_dispatch: # Allow manual trigger for re-runs
 
-# One group per commit: a shared group keeps only one pending run and would
-# drop an intermediate version bump before it publishes.
+# Releases run one at a time, in order. `queue: max` keeps every pending run;
+# the default keeps only one and would drop a version bump before it publishes.
 concurrency:
-  group: release-${{ github.sha }}
-  cancel-in-progress: false
+  group: release
+  queue: max
 
 permissions: {}
 
