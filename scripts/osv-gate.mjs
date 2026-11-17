@@ -149,10 +149,10 @@ export function parseOsvConfig(toml) {
     const where = `osv-scanner.toml line ${n + 1}`;
     const header = /^\[\[\s*([A-Za-z]+)\s*\]\]$/.exec(line);
     if (header) {
-      if (!Object.hasOwn(config, header[1]))
-        throw new Error(`${where}: the gate does not check [[${header[1]}]] tables`);
+      // osv-scanner matches table and key names case-insensitively, so the gate does too.
+      table = Object.keys(config).find((name) => name.toLowerCase() === header[1].toLowerCase());
+      if (!table) throw new Error(`${where}: the gate does not check [[${header[1]}]] tables`);
       current = {};
-      table = header[1];
       config[table].push(current);
       return;
     }
@@ -170,7 +170,7 @@ export function parseOsvConfig(toml) {
     if (table === 'PackageOverrides' && value.startsWith('{'))
       throw new Error(`${where}: write package overrides with dotted keys (vulnerability.ignore = true), not inline tables`);
     // Top-level settings cannot hide a finding.
-    if (current) current[key] = parseValue(value, where);
+    if (current) current[key.toLowerCase()] = parseValue(value, where);
   });
   return config;
 }

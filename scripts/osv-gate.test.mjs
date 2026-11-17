@@ -173,7 +173,7 @@ describe('parseOsvConfig and invalidExceptions', () => {
     ].join('\n');
     const config = parseOsvConfig(toml);
     assert.deepEqual(config.IgnoredVulns, [
-      { id: 'GHSA-1', ignoreUntil: '2027-01-01', reason: 'dev server only, "quoted" #not-a-comment' },
+      { id: 'GHSA-1', ignoreuntil: '2027-01-01', reason: 'dev server only, "quoted" #not-a-comment' },
       { id: 'GHSA-2' },
     ]);
     assert.deepEqual(invalidExceptions(config), ['GHSA-2 has no reason']);
@@ -205,6 +205,24 @@ describe('parseOsvConfig and invalidExceptions', () => {
     assert.deepEqual(invalidExceptions(parseOsvConfig(toml)), [
       'a ignores vulnerabilities without a reason',
       'b ignores vulnerabilities without a reason',
+    ]);
+  });
+
+  it('matches table and key names case-insensitively, as osv-scanner does', () => {
+    const toml = [
+      '[[ignoredvulns]]',
+      'ID = "GHSA-1"',
+      '[[PACKAGEOVERRIDES]]',
+      'Name = "a"',
+      'Ignore = true',
+      '[[PackageOverrides]]',
+      'name = "b"',
+      'Vulnerability.IGNORE = true',
+      'Reason = "patched in our fork"',
+    ].join('\n');
+    assert.deepEqual(invalidExceptions(parseOsvConfig(toml)), [
+      'GHSA-1 has no reason',
+      'a ignores vulnerabilities without a reason',
     ]);
   });
 
