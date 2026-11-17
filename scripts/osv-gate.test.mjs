@@ -6,7 +6,7 @@ import {
   invalidExceptions,
   lookupLicenses,
   parseArgs,
-  parseIgnoredVulns,
+  parseOsvConfig,
   renderSummary,
   severityOf,
 } from './osv-gate.mjs';
@@ -124,47 +124,107 @@ describe('compareScans', () => {
     );
   });
 
+  it('blocks a second affected version added beside one already there', () => {
+    const base = scanOf(pkg('qs', '1.0.0', [{ id: 'GHSA-qs', score: '7.5' }]));
+    const head = scanOf(
+      pkg('qs', '1.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+      pkg('qs', '2.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+    );
+    const result = compareScans(base, head);
+    assert.deepEqual(
+      result.blocking.map((f) => f.version),
+      ['2.0.0'],
+    );
+    assert.deepEqual(
+      result.existing.map((f) => f.version),
+      ['1.0.0'],
+    );
+  });
+
+  it('lets an affected version replace one the PR removed', () => {
+    const base = scanOf(
+      pkg('qs', '1.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+      pkg('qs', '2.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+    );
+    const head = scanOf(
+      pkg('qs', '2.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+      pkg('qs', '3.0.0', [{ id: 'GHSA-qs', score: '7.5' }]),
+    );
+    assert.deepEqual(compareScans(base, head).blocking, []);
+  });
+
   it('handles a scan with no results', () => {
     assert.deepEqual(compareScans({ results: null }, { results: [] }).introduced, []);
   });
 });
 
-describe('parseIgnoredVulns and invalidExceptions', () => {
-  it('reads entries and skips comments and other tables', () => {
+describe('parseOsvConfig and invalidExceptions', () => {
+  it('reads entries, trailing comments, spaced headers and a # inside a string', () => {
     const toml = [
       '# header comment',
-      '[[IgnoredVulns]]',
+      'GoVersionOverride = "1.22"',
+      '[[IgnoredVulns]] # temporary',
       'id = "GHSA-1" # trailing comment',
       'ignoreUntil = 2027-01-01',
-      'reason = "dev server only, \\"quoted\\""',
+      'reason = "dev server only, \\"quoted\\" #not-a-comment"',
       '',
-      '[[PackageOverrides]]',
-      'name = "left-pad"',
-      '',
-      '[[IgnoredVulns]]',
-      'id = "GHSA-2"',
+      '[[ IgnoredVulns ]]',
+      "id = 'GHSA-2'",
     ].join('\n');
-    const entries = parseIgnoredVulns(toml);
-    assert.deepEqual(entries, [
-      { id: 'GHSA-1', ignoreUntil: '2027-01-01', reason: 'dev server only, "quoted"' },
+    const config = parseOsvConfig(toml);
+    assert.deepEqual(config.IgnoredVulns, [
+      { id: 'GHSA-1', ignoreUntil: '2027-01-01', reason: 'dev server only, "quoted" #not-a-comment' },
       { id: 'GHSA-2' },
     ]);
-    assert.deepEqual(invalidExceptions(entries), ['GHSA-2 has no reason']);
+    assert.deepEqual(invalidExceptions(config), ['GHSA-2 has no reason']);
   });
 
   it('reads a commented-out example as no entries', () => {
-    assert.deepEqual(parseIgnoredVulns('# [[IgnoredVulns]]\n# id = "GHSA-x"\n'), []);
+    assert.deepEqual(parseOsvConfig('# [[IgnoredVulns]]\n# id = "GHSA-x"\n'), {
+      IgnoredVulns: [],
+      PackageOverrides: [],
+    });
   });
 
-  it('rejects a line it cannot read rather than skipping it', () => {
-    assert.throws(() => parseIgnoredVulns('[[IgnoredVulns]]\nid = \n'), /cannot read/);
+  it('requires a reason on every package override that hides vulnerabilities', () => {
+    const toml = [
+      '[[PackageOverrides]]',
+      'name = "a"',
+      'ignore = true',
+      '[[PackageOverrides]]',
+      'name = "b"',
+      'vulnerability.ignore = true',
+      '[[PackageOverrides]]',
+      'name = "c"',
+      'vulnerability = { ignore = true }',
+      '[[PackageOverrides]]',
+      'name = "d"',
+      'vulnerability.ignore = true',
+      'reason = "vendored and patched"',
+      '[[PackageOverrides]]',
+      'name = "e"',
+      'license.override = ["MIT"]',
+    ].join('\n');
+    assert.deepEqual(invalidExceptions(parseOsvConfig(toml)), [
+      'a ignores vulnerabilities without a reason',
+      'b ignores vulnerabilities without a reason',
+      'c ignores vulnerabilities without a reason',
+    ]);
+  });
+
+  it('fails closed on what it cannot check', () => {
+    assert.throws(() => parseOsvConfig('[[Unknown]]\nid = "x"'), /does not check \[\[Unknown\]\]/);
+    assert.throws(() => parseOsvConfig('[PackageOverrides.vulnerability]\nignore = true'), /cannot check/);
+    assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nreason = """\nwhy\n"""'), /multi-line/);
+    assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = \n'), /cannot read/);
+    assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = "unterminated\n'), /cannot read the string/);
   });
 
   it('flags a blank reason and a missing id', () => {
-    assert.deepEqual(invalidExceptions([{ id: 'GHSA-1', reason: '  ' }, { reason: 'why' }]), [
-      'GHSA-1 has no reason',
-      'entry 2 has no id',
-    ]);
+    assert.deepEqual(
+      invalidExceptions({ IgnoredVulns: [{ id: 'GHSA-1', reason: '  ' }, { reason: 'why' }], PackageOverrides: [] }),
+      ['GHSA-1 has no reason', 'entry 2 has no id'],
+    );
   });
 });
 
@@ -243,7 +303,10 @@ describe('lookupLicenses', () => {
   it('gives up on a registry request that stalls', async () => {
     const fetcher = (_url, init) =>
       new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal.reason)));
-    const licenses = await lookupLicenses(['slow@1.0.0'], fetcher, 20);
+    // AbortSignal.timeout does not keep Node running; a real request's socket
+    // would, so hold the loop open while the fake one waits.
+    const keepAlive = setInterval(() => {}, 1000);
+    const licenses = await lookupLicenses(['slow@1.0.0'], fetcher, 20).finally(() => clearInterval(keepAlive));
     assert.equal(licenses.get('slow@1.0.0'), 'unknown (registry unreachable)');
   });
 

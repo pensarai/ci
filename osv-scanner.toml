@@ -2,6 +2,9 @@
 #
 # Each entry names one advisory and says why it is accepted. The gate fails
 # on an entry without a reason. `ignoreUntil` is optional.
+# A [[PackageOverrides]] entry that sets `ignore` or `vulnerability.ignore`
+# hides findings too, and needs a `reason` the same way. The gate reads this
+# file strictly: other tables and multi-line values are rejected, not skipped.
 #
 # [[IgnoredVulns]]
 # id = "GHSA-xxxx-xxxx-xxxx"
