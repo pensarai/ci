@@ -142,6 +142,7 @@ function parseValue(raw, where) {
 export function parseOsvConfig(toml) {
   const config = { IgnoredVulns: [], PackageOverrides: [] };
   let current = null;
+  let table = null;
   toml.split('\n').forEach((raw, n) => {
     const line = stripComment(raw).trim();
     if (!line) return;
@@ -151,7 +152,8 @@ export function parseOsvConfig(toml) {
       if (!Object.hasOwn(config, header[1]))
         throw new Error(`${where}: the gate does not check [[${header[1]}]] tables`);
       current = {};
-      config[header[1]].push(current);
+      table = header[1];
+      config[table].push(current);
       return;
     }
     if (line.startsWith('['))
@@ -163,6 +165,10 @@ export function parseOsvConfig(toml) {
     const [, key, value] = kv;
     if (value.startsWith('"""') || value.startsWith("'''"))
       throw new Error(`${where}: the gate cannot check multi-line strings`);
+    // An inline table can spell an ignore many ways ({ "ignore" = true }, ...);
+    // dotted keys can only spell it one way, which the gate checks exactly.
+    if (table === 'PackageOverrides' && value.startsWith('{'))
+      throw new Error(`${where}: write package overrides with dotted keys (vulnerability.ignore = true), not inline tables`);
     // Top-level settings cannot hide a finding.
     if (current) current[key] = parseValue(value, where);
   });
@@ -171,11 +177,7 @@ export function parseOsvConfig(toml) {
 
 /** A package override hides findings when any of its keys ignores the package or its vulnerabilities. */
 function overrideHides(override) {
-  return Object.entries(override).some(
-    ([key, value]) =>
-      (/(^|\.)ignore$/.test(key) && value === true) ||
-      (typeof value === 'string' && /\bignore\s*=\s*true\b/.test(value)),
-  );
+  return Object.entries(override).some(([key, value]) => /(^|\.)ignore$/.test(key) && value === true);
 }
 
 const hasReason = (entry) => typeof entry.reason === 'string' && entry.reason.trim() !== '';
@@ -344,7 +346,14 @@ async function main() {
   process.chdir(git(['rev-parse', '--show-toplevel']).trim());
 
   const config = resolve('osv-scanner.toml');
-  const problems = invalidExceptions(parseOsvConfig(readFileSync(config, 'utf8')));
+  let problems;
+  try {
+    problems = invalidExceptions(parseOsvConfig(readFileSync(config, 'utf8')));
+  } catch (err) {
+    // A config the gate cannot read is a failed gate, reported where it points.
+    console.log(`::error file=osv-scanner.toml::${err.message}`);
+    process.exit(1);
+  }
   if (problems.length) {
     for (const p of problems) console.log(`::error file=osv-scanner.toml::Exception ${p}`);
     process.exit(1);

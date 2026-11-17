@@ -195,9 +195,6 @@ describe('parseOsvConfig and invalidExceptions', () => {
       'name = "b"',
       'vulnerability.ignore = true',
       '[[PackageOverrides]]',
-      'name = "c"',
-      'vulnerability = { ignore = true }',
-      '[[PackageOverrides]]',
       'name = "d"',
       'vulnerability.ignore = true',
       'reason = "vendored and patched"',
@@ -208,7 +205,6 @@ describe('parseOsvConfig and invalidExceptions', () => {
     assert.deepEqual(invalidExceptions(parseOsvConfig(toml)), [
       'a ignores vulnerabilities without a reason',
       'b ignores vulnerabilities without a reason',
-      'c ignores vulnerabilities without a reason',
     ]);
   });
 
@@ -217,6 +213,13 @@ describe('parseOsvConfig and invalidExceptions', () => {
     assert.throws(() => parseOsvConfig('[PackageOverrides.vulnerability]\nignore = true'), /cannot check/);
     assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nreason = """\nwhy\n"""'), /multi-line/);
     assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = \n'), /cannot read/);
+    for (const inline of ['{ ignore = true }', '{ "ignore" = true }', "{ 'ignore' = true }"])
+      assert.throws(
+        () => parseOsvConfig(`[[PackageOverrides]]\nname = "x"\nvulnerability = ${inline}`),
+        /dotted keys/,
+      );
+    assert.throws(() => parseOsvConfig('[[PackageOverrides]]\n"vulnerability".ignore = true'), /cannot read/);
+    assert.throws(() => parseOsvConfig('[[PackageOverrides]]\nvulnerability."ignore" = true'), /cannot read/);
     assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = "unterminated\n'), /cannot read the string/);
   });
 
