@@ -162,7 +162,6 @@ describe('parseOsvConfig and invalidExceptions', () => {
   it('reads entries, trailing comments, spaced headers and a # inside a string', () => {
     const toml = [
       '# header comment',
-      'GoVersionOverride = "1.22"',
       '[[IgnoredVulns]] # temporary',
       'id = "GHSA-1" # trailing comment',
       'ignoreUntil = 2027-01-01',
@@ -237,6 +236,14 @@ describe('parseOsvConfig and invalidExceptions', () => {
         /dotted keys/,
       );
     assert.throws(() => parseOsvConfig('[[PackageOverrides]]\n"vulnerability".ignore = true'), /cannot read/);
+    for (const topLevel of [
+      'IgnoredVulns = [{ id = "GHSA-1" }]',
+      'PackageOverrides = [{ name = "x", ignore = true }]',
+      'ignoredvulns = []',
+      'GoVersionOverride = "1.22"',
+    ])
+      assert.throws(() => parseOsvConfig(topLevel), /no top-level settings/);
+    assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = { value = "GHSA-1" }'), /dotted keys/);
     assert.throws(() => parseOsvConfig('[[PackageOverrides]]\nvulnerability."ignore" = true'), /cannot read/);
     assert.throws(() => parseOsvConfig('[[IgnoredVulns]]\nid = "unterminated\n'), /cannot read the string/);
   });

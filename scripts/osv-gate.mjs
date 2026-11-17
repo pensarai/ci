@@ -134,15 +134,16 @@ function parseValue(raw, where) {
 }
 
 /**
- * The tables of osv-scanner.toml that can hide a finding. It fails closed: a
- * table the gate does not check, a multi-line value or a line it cannot read
- * is an error, never skipped, so an exception cannot slip past the reason
- * check.
+ * The tables of osv-scanner.toml that can hide a finding. The file is held to
+ * an allowlist so the gate reads it exactly as osv-scanner does: comments,
+ * [[IgnoredVulns]] and [[PackageOverrides]] tables, and one-line `key = value`
+ * entries inside them. Anything else (a top-level key, another table, an
+ * inline table, a multi-line value, a line it cannot read) is an error, never
+ * skipped, so an exception cannot slip past the reason check.
  */
 export function parseOsvConfig(toml) {
   const config = { IgnoredVulns: [], PackageOverrides: [] };
   let current = null;
-  let table = null;
   toml.split('\n').forEach((raw, n) => {
     const line = stripComment(raw).trim();
     if (!line) return;
@@ -150,7 +151,7 @@ export function parseOsvConfig(toml) {
     const header = /^\[\[\s*([A-Za-z]+)\s*\]\]$/.exec(line);
     if (header) {
       // osv-scanner matches table and key names case-insensitively, so the gate does too.
-      table = Object.keys(config).find((name) => name.toLowerCase() === header[1].toLowerCase());
+      const table = Object.keys(config).find((name) => name.toLowerCase() === header[1].toLowerCase());
       if (!table) throw new Error(`${where}: the gate does not check [[${header[1]}]] tables`);
       current = {};
       config[table].push(current);
@@ -165,12 +166,17 @@ export function parseOsvConfig(toml) {
     const [, key, value] = kv;
     if (value.startsWith('"""') || value.startsWith("'''"))
       throw new Error(`${where}: the gate cannot check multi-line strings`);
+    // A top-level key can hold the same exceptions as an array of inline
+    // tables (IgnoredVulns = [{ ... }]), so none is allowed.
+    if (!current)
+      throw new Error(
+        `${where}: the gate allows no top-level settings; put exceptions in [[IgnoredVulns]] or [[PackageOverrides]] tables`,
+      );
     // An inline table can spell an ignore many ways ({ "ignore" = true }, ...);
     // dotted keys can only spell it one way, which the gate checks exactly.
-    if (table === 'PackageOverrides' && value.startsWith('{'))
-      throw new Error(`${where}: write package overrides with dotted keys (vulnerability.ignore = true), not inline tables`);
-    // Top-level settings cannot hide a finding.
-    if (current) current[key.toLowerCase()] = parseValue(value, where);
+    if (value.startsWith('{'))
+      throw new Error(`${where}: write dotted keys (vulnerability.ignore = true), not inline tables`);
+    current[key.toLowerCase()] = parseValue(value, where);
   });
   return config;
 }
