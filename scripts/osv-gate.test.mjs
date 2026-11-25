@@ -188,7 +188,13 @@ describe('scanAndCompare', () => {
   const fakeScanner = (calls) => (lockfiles, config) => {
     calls.push({ lockfiles, config });
     const shown = (versions) => versions.filter((v) => !(config && v === '1.0.0')).map(qs);
-    return { results: [at('/base/bun.lock', ...shown(['1.0.0'])), at('/head/bun.lock', ...shown(['1.0.0', '2.0.0']))] };
+    const clean = pkg('left-pad', '1.3.0');
+    return {
+      results: [
+        at('/base/bun.lock', clean, ...shown(['1.0.0'])),
+        at('/head/bun.lock', clean, ...shown(['1.0.0', '2.0.0'])),
+      ],
+    };
   };
 
   it('blocks a new affected version beside one an exception accepts', () => {
@@ -225,18 +231,35 @@ describe('scanAndCompare', () => {
 });
 
 describe('splitBySource', () => {
-  const at = (path) => ({ source: { path, type: 'lockfile' }, packages: [pkg(path, '1.0.0')] });
+  const at = (path, ...packages) => ({ source: { path, type: 'lockfile' }, packages });
+  const one = (path) => at(path, pkg(path, '1.0.0'));
 
-  it('splits results by lockfile path, and reads a lockfile with no result as empty', () => {
-    assert.deepEqual(splitBySource({ results: [at('/b'), at('/a')] }, ['/a', '/b', '/c']), [
-      { results: [at('/a')] },
-      { results: [at('/b')] },
-      { results: [] },
+  it('splits results by lockfile path', () => {
+    assert.deepEqual(splitBySource({ results: [one('/b'), one('/a')] }, ['/a', '/b']), [
+      { results: [one('/a')] },
+      { results: [one('/b')] },
     ]);
   });
 
+  it('matches Windows paths that osv-scanner reports with forward slashes', () => {
+    const scanned = { results: [one('C:/w/base/bun.lock'), one('C:/w/head/bun.lock')] };
+    const native = ['C:\\w\\base\\bun.lock', 'C:\\w\\head\\bun.lock'];
+    assert.deepEqual(splitBySource(scanned, native, 'win32'), [
+      { results: [one('C:/w/base/bun.lock')] },
+      { results: [one('C:/w/head/bun.lock')] },
+    ]);
+    // Elsewhere a backslash can be part of a file name, so paths match exactly.
+    assert.throws(() => splitBySource(scanned, native, 'linux'), /not a scanned lockfile/);
+  });
+
+  it('fails on a lockfile with no packages, as when exceptions hide every package', () => {
+    assert.throws(() => splitBySource({ results: [one('/a')] }, ['/a', '/b']), /no packages for \/b/);
+    assert.throws(() => splitBySource({ results: [one('/b'), at('/a')] }, ['/a', '/b']), /no packages for \/a/);
+    assert.throws(() => splitBySource({ results: [] }, ['/a', '/b']), /no packages for \/a/);
+  });
+
   it('fails on a result for a path the gate did not scan', () => {
-    assert.throws(() => splitBySource({ results: [at('/elsewhere')] }, ['/a', '/b']), /not a scanned lockfile/);
+    assert.throws(() => splitBySource({ results: [one('/a'), one('/b'), one('/elsewhere')] }, ['/a', '/b']), /not a scanned lockfile/);
   });
 });
 
