@@ -13,7 +13,6 @@ The facts shared skills and agents read to work in this repo.
 | Trunk      | `main`, the default branch                                                                                                                                                                                                          |
 | Bootstrap  | `npm ci` (Node 18 or later)                                                                                                                                                                                                         |
 | Validation | As in CI: `npm run build`, `npm run check`, `npm run check:dependency-pins`, `node --test scripts/*.test.mjs`, `node dist/bin/index.js --help`; also `zizmor --pedantic .` and, after `git fetch`, `npm run check:osv-gate` (below) |
-| Worktrees  | `../ci-worktrees/<branch>` beside the main checkout, with each `/` in the branch name replaced by `-`                                                                                                                               |
 | Issues     | GitHub issues in `pensarai/ci`                                                                                                                                                                                                      |
 
 ## Layout
