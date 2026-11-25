@@ -4,6 +4,30 @@ Instructions for coding agents working in this repo. `CLAUDE.md` is a symlink to
 
 What the repo does and how to run it are in [`README.md`](README.md).
 
+## Repo contract
+
+The facts shared skills and agents read to work in this repo.
+
+| Key        | Value                                                                                                                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trunk      | `main`, the default branch                                                                                                                                                                                      |
+| Bootstrap  | `npm ci` (Node 18 or later)                                                                                                                                                                                     |
+| Validation | As in CI: `npm run build`, `npm run check`, `npm run check:dependency-pins`, `node --test scripts/*.test.mjs`, `node dist/bin/index.js --help`; also `zizmor --pedantic .` and `npm run check:osv-gate` (below) |
+| Worktrees  | `../ci-worktrees/<branch>` beside the main checkout, with each `/` in the branch name replaced by `-`                                                                                                           |
+| Issues     | GitHub issues in `pensarai/ci`                                                                                                                                                                                  |
+
+## Layout
+
+- `src/bin/index.ts`: the `pensar` CLI (commander). `src/lib/ci.ts`: the Pensar API client it calls. `src/lib/gitlab.ts`: maps GitLab CI variables to that client.
+- `src/test/baseSha.ts`: what `npm run check` runs, against the built `dist/`, so build first.
+- `scripts/`: the dependency pin check and the osv gate, each with a `node --test` file beside it.
+- `examples/`: CI workflows for users; shipped in the npm package, as is `README.md`.
+- `.github/workflows/`: `ci.yml` (the checks on every PR) and `release.yml`.
+
+## Releases
+
+On every push to `main`, `release.yml` publishes to npm if the `package.json` version is not on npm yet, then creates the `v<version>` tag and GitHub release. A PR that bumps the version ships when it merges; one that leaves the version alone ships nothing.
+
 ## GitHub Actions — pinned to a commit SHA
 
 A tag such as `@v4` can be repointed by whoever controls the action's repository, and the next run then executes their code with this repository's npm publish credentials. So nothing a workflow runs is referenced by a movable name. The `zizmor` job in `.github/workflows/ci.yml` enforces this on every PR (config: `.github/zizmor.yml`).
