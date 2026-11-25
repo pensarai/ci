@@ -8,13 +8,13 @@ What the repo does and how to run it are in [`README.md`](README.md).
 
 The facts shared skills and agents read to work in this repo.
 
-| Key        | Value                                                                                                                                                                                                           |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Trunk      | `main`, the default branch                                                                                                                                                                                      |
-| Bootstrap  | `npm ci` (Node 18 or later)                                                                                                                                                                                     |
-| Validation | As in CI: `npm run build`, `npm run check`, `npm run check:dependency-pins`, `node --test scripts/*.test.mjs`, `node dist/bin/index.js --help`; also `zizmor --pedantic .` and `npm run check:osv-gate` (below) |
-| Worktrees  | `../ci-worktrees/<branch>` beside the main checkout, with each `/` in the branch name replaced by `-`                                                                                                           |
-| Issues     | GitHub issues in `pensarai/ci`                                                                                                                                                                                  |
+| Key        | Value                                                                                                                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trunk      | `main`, the default branch                                                                                                                                                                                                          |
+| Bootstrap  | `npm ci` (Node 18 or later)                                                                                                                                                                                                         |
+| Validation | As in CI: `npm run build`, `npm run check`, `npm run check:dependency-pins`, `node --test scripts/*.test.mjs`, `node dist/bin/index.js --help`; also `zizmor --pedantic .` and, after `git fetch`, `npm run check:osv-gate` (below) |
+| Worktrees  | `../ci-worktrees/<branch>` beside the main checkout, with each `/` in the branch name replaced by `-`                                                                                                                               |
+| Issues     | GitHub issues in `pensarai/ci`                                                                                                                                                                                                      |
 
 ## Layout
 
@@ -26,7 +26,7 @@ The facts shared skills and agents read to work in this repo.
 
 ## Releases
 
-On every push to `main`, `release.yml` publishes to npm if the `package.json` version is not on npm yet, then creates the `v<version>` tag and GitHub release. A PR that bumps the version ships when it merges; one that leaves the version alone ships nothing.
+On every push to `main`, `release.yml` publishes to npm if the `package.json` version is not on npm yet, then creates the `v<version>` tag and GitHub release. A PR that bumps the version ships when it merges. One that leaves the version alone ships nothing, unless that version is still unpublished because an earlier release failed; then the next push to `main` publishes it.
 
 ## GitHub Actions — pinned to a commit SHA
 
