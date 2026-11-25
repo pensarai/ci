@@ -33,7 +33,7 @@
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function severityOf(maxSeverity) {
@@ -402,7 +402,25 @@ function scan(lockfiles, config) {
   // 0: nothing found, 1: vulnerabilities found. Anything else is a failed scan.
   if (res.status !== 0 && res.status !== 1)
     throw new Error(`osv-scanner failed on ${lockfiles.join(', ')} (exit ${res.status}): ${res.stderr}`);
-  return JSON.parse(res.stdout);
+  const scanned = JSON.parse(res.stdout);
+  scanned.ignoredPackages = ignoredPackagesFrom(res.stderr);
+  return scanned;
+}
+
+/**
+ * The npm packages osv-scanner logs as dropped by a `[[PackageOverrides]]`
+ * ignore ("Package npm/<name>/<version> has been filtered out because: …"),
+ * as `name@version`. The scanner applies its own override rules (regex names,
+ * groups, expiry), so the gate takes its word rather than repeating them. A
+ * log line it does not recognize excuses nothing, so the gate fails closed.
+ */
+export function ignoredPackagesFrom(log) {
+  const ignored = new Set();
+  for (const line of (log ?? '').split('\n')) {
+    const m = /^Package npm\/(.+)\/([^/\s]+) has been filtered out because:/.exec(line.trim());
+    if (m) ignored.add(`${m[1]}@${m[2]}`);
+  }
+  return ignored;
 }
 
 /**
@@ -431,7 +449,8 @@ export function splitBySource(scanned, lockfiles, platform = process.platform) {
  * Scans every gated lockfile and its merge-base copy in one run, then compares
  * each pair. `pairs` is `[{ base, head }]`; `base` is null for a lockfile the
  * PR adds, which is compared against an empty scan, so every advisory in it is
- * introduced. Returns `[{ base, head, result }]` with the split scans.
+ * introduced. Returns `[{ base, head, result, ignored }]`: the split scans,
+ * and the packages the run's exceptions left out (`ignoredPackagesFrom`).
  */
 export function scanAndCompare(pairs, config, scanner = scan) {
   // One osv-scanner run matches every lockfile against one download of the
@@ -441,11 +460,13 @@ export function scanAndCompare(pairs, config, scanner = scan) {
   // the exceptions: a finding hidden only on the head would read as a version
   // the PR removed, and let a new affected version replace it.
   const lockfiles = pairs.flatMap((p) => (p.base ? [p.base, p.head] : [p.head]));
-  const scans = splitBySource(scanner(lockfiles, config), lockfiles);
+  const scanned = scanner(lockfiles, config);
+  const scans = splitBySource(scanned, lockfiles);
+  const ignored = scanned.ignoredPackages ?? new Set();
   return pairs.map((p) => {
     const base = p.base ? scans.shift() : { results: [] };
     const head = scans.shift();
-    return { base, head, result: compareScans(base, head) };
+    return { base, head, result: compareScans(base, head), ignored };
   });
 }
 
@@ -480,7 +501,8 @@ export function parseJsonWithTrailingCommas(text) {
 // a workspace, link, file, Git or tarball dependency, which osv-scanner reports
 // under another name or with no version, or an entry the gate cannot read.
 const REGISTRY_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/;
-const BUN_NOT_REGISTRY = /^(?:workspace:|link:|file:|root:|git\+|git:|github:|https?:)/;
+// Bun writes a local tarball as a bare path: ./x.tgz, ../x.tgz or /x.tgz.
+const BUN_NOT_REGISTRY = /^(?:workspace:|link:|file:|root:|git\+|git:|github:|https?:|\.{1,2}\/|\/)/;
 const NPM_NOT_REGISTRY = /^(?:git\+|git:|github:|file:)/;
 
 /**
@@ -534,27 +556,17 @@ export function lockedPackages(path, text) {
 /**
  * Locked registry packages missing from osv-scanner's result for that
  * lockfile. A package the scanner never read was never matched against an
- * advisory, so its advisories cannot block. Packages a `[[PackageOverrides]]`
- * entry hides with `ignore = true` are left out of the scan on purpose and
- * are returned as `hidden` instead; the gate already requires their reason.
+ * advisory, so its advisories cannot block. Packages the scanner says a
+ * `[[PackageOverrides]]` ignore left out (`ignored`) are returned as `hidden`
+ * instead; the gate already requires their reason.
  */
-export function unreadPackages(locked, scan, overrides) {
+export function unreadPackages(locked, scan, ignored) {
   const read = packageVersions(scan);
   const missing = [];
   const hidden = [];
   for (const p of [...locked.registry].sort()) {
     if (read.has(p)) continue;
-    const at = p.lastIndexOf('@');
-    const name = p.slice(0, at);
-    const version = p.slice(at + 1);
-    const ignored = overrides.some(
-      (o) =>
-        o.ignore === true &&
-        o.name === name &&
-        (o.version === undefined || o.version === version) &&
-        (o.ecosystem === undefined || String(o.ecosystem).toLowerCase() === 'npm'),
-    );
-    (ignored ? hidden : missing).push(p);
+    (ignored.has(p) ? hidden : missing).push(p);
   }
   return { total: locked.registry.size, other: locked.other, missing, hidden };
 }
@@ -566,11 +578,8 @@ async function main() {
 
   const config = resolve('osv-scanner.toml');
   let problems;
-  let overrides;
   try {
-    const parsed = parseOsvConfig(readFileSync(config, 'utf8'));
-    problems = invalidExceptions(parsed);
-    overrides = parsed.PackageOverrides;
+    problems = invalidExceptions(parseOsvConfig(readFileSync(config, 'utf8')));
   } catch (err) {
     // A config the gate cannot read is a failed gate, reported where it points.
     console.log(`::error file=osv-scanner.toml::${err.message}`);
@@ -585,7 +594,7 @@ async function main() {
   const baseDir = mkdtempSync(join(tmpdir(), 'osv-gate-base-'));
   let gated;
   try {
-    const pairs = opts.lockfiles.map((lockfile, i) => {
+    const pairs = opts.lockfiles.map((l) => repoPath(l)).map((lockfile, i) => {
       const headText = readFileSync(lockfile, 'utf8');
       const baseText = gitFileAt(mergeBase, lockfile);
       let base = null;
@@ -602,8 +611,8 @@ async function main() {
     gated = scanAndCompare(pairs, config).map((scanned, i) => {
       const { lockfile, headText, baseText } = pairs[i];
       const coverage = {
-        head: unreadPackages(lockedPackages(lockfile, headText), scanned.head, overrides),
-        base: baseText === null ? null : unreadPackages(lockedPackages(lockfile, baseText), scanned.base, overrides),
+        head: unreadPackages(lockedPackages(lockfile, headText), scanned.head, scanned.ignored),
+        base: baseText === null ? null : unreadPackages(lockedPackages(lockfile, baseText), scanned.base, scanned.ignored),
       };
       return { lockfile, result: scanned.result, coverage };
     });
@@ -628,13 +637,20 @@ async function main() {
       console.log(
         `::error file=${lockfile},title=Packages osv-scanner did not read::${coverage.head.missing.length} of ${coverage.head.total} registry packages, starting with ${coverage.head.missing.slice(0, 5).join(', ')}`,
       );
-    if (coverage.base?.missing.length)
-      console.log(
-        `::warning file=${lockfile},title=Base packages osv-scanner did not read::${coverage.base.missing.length} of ${coverage.base.total} registry packages in the merge base's copy`,
-      );
     if (result.blocking.length || coverage.head.missing.length) failed = true;
   }
   if (failed) process.exit(1);
+}
+
+/**
+ * A lockfile path relative to the repository root, the form `git show` needs,
+ * whether it was given relative to the root or absolute.
+ */
+export function repoPath(path, root = process.cwd()) {
+  const rel = relative(root, resolve(root, path)).split(sep).join('/');
+  if (!rel || rel.startsWith('../') || rel === '..' || isAbsolute(rel))
+    throw new Error(`${path} is not a file in this repository`);
+  return rel;
 }
 
 /** The file at a commit, or null when the commit does not have it. */
