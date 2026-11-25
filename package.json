@@ -32,6 +32,7 @@
   "dependencies": {
     "commander": "13.1.0",
     "dotenv": "16.4.7",
+    "minimist": "1.2.5",
     "zod": "4.6.6"
   },
   "files": [
